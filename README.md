@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Xan's Eye Website
 
-## Getting Started
+Rebuilt in Next.js with these routes:
 
-First, run the development server:
+- /
+- /pricing
+- /weddings
+- /about-us
+- /contact-me
+- /restoring-project
+
+## Local Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Contact Setup (No Form)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This site uses direct email contact (no web form) on /contact-me.
 
-## Learn More
+Spam-reduction approach:
 
-To learn more about Next.js, take a look at the following resources:
+- Display address in human-readable format: hello [at] xanseye [dot] com
+- Provide a mailto button for convenience
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+If spam volume ever increases, add a form later with Cloudflare Turnstile.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Recommended Hosting + Domain Setup
 
-## Deploy on Vercel
+Recommended stack:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Hosting: Vercel
+- Domain registrar + DNS: Cloudflare Registrar + Cloudflare DNS
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This gives fast deploys for Next.js and low-cost domain renewal.
+
+## Step-by-Step Migration From GoDaddy
+
+1. Keep GoDaddy hosting active during migration.
+2. Push this repo to GitHub.
+3. Import repo into Vercel and deploy.
+4. In Vercel, add both domains: xanseye.com and www.xanseye.com.
+5. Copy required DNS records shown by Vercel.
+6. In GoDaddy DNS, update records to Vercel targets.
+7. Wait for SSL to issue in Vercel, then verify both HTTPS URLs.
+8. After stable traffic for 48-72 hours, cancel old GoDaddy hosting.
+
+## Move Domain Registration From GoDaddy to Cloudflare
+
+1. In GoDaddy, unlock xanseye.com.
+2. Request EPP/Auth code from GoDaddy.
+3. Ensure domain has been registered for at least 60 days.
+4. In Cloudflare, start transfer and enter EPP code.
+5. Approve transfer email.
+6. Keep DNS records unchanged during transfer to avoid downtime.
+7. After transfer completes, keep Cloudflare DNS pointing to Vercel.
+
+## Production Checks
+
+- Confirm all pages and navigation links work.
+- Confirm the contact page shows the email address and opens an email draft correctly.
+- Check mobile layout on iPhone + Android widths.
+- Verify HTTPS on apex and www domains.

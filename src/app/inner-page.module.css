@@ -1,0 +1,149 @@
+.main {
+  display: grid;
+  gap: 22px;
+}
+
+.hero,
+.section {
+  background: rgba(255, 250, 245, 0.82);
+  border: 1px solid rgba(104, 70, 53, 0.18);
+  border-radius: 18px;
+  box-shadow: 0 8px 26px rgba(79, 53, 40, 0.12);
+  padding: 28px;
+}
+
+.kicker {
+  display: inline-block;
+  margin-bottom: 12px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #7f4b35;
+}
+
+.hero h1,
+.section h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.15;
+  margin-bottom: 10px;
+}
+
+.hero h1 {
+  font-size: clamp(1.7rem, 3.2vw, 2.8rem);
+}
+
+.hero p,
+.section p,
+.section li {
+  color: #4d372c;
+  line-height: 1.6;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.card {
+  border: 1px solid rgba(128, 85, 59, 0.2);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.card h3 {
+  margin-bottom: 8px;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.list {
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.primaryBtn,
+.secondaryBtn {
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.primaryBtn {
+  background: #8b4a2a;
+  color: #fff6ee;
+}
+
+.secondaryBtn {
+  border: 1px solid #9f664a;
+  color: #6e3f29;
+}
+
+.primaryBtn:hover,
+.secondaryBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(87, 49, 34, 0.2);
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+  font-size: 0.92rem;
+  color: #3e2a20;
+}
+
+.field input,
+.field select,
+.field textarea {
+  border: 1px solid rgba(126, 84, 59, 0.35);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  color: #2f1d15;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: #8b4a2a;
+  box-shadow: 0 0 0 3px rgba(139, 74, 42, 0.16);
+}
+
+.honeypotWrap {
+  position: absolute;
+  left: -9999px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.successText {
+  color: #1f6d33;
+}
+
+.errorText {
+  color: #b02f2f;
+}
