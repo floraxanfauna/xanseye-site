@@ -1,0 +1,13 @@
+/************************
+ * Color Background *****
+************************/
+html.sm-user-ui  {
+        background-size: 100%;
+}
+
+@media screen and (max-width: 768px) {
+    html.sm-user-ui  {
+        background-size: auto;
+    }
+}
+    
