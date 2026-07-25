@@ -1,10 +1,22 @@
 import { SiteShell } from "@/components/SiteShell";
+import type { Metadata } from "next";
 import { AutoGallerySlideshow } from "@/components/AutoGallerySlideshow";
 import { getPagePhotoUrls } from "@/lib/pagePhotos";
+import { saltLakePhotographerKeywords } from "@/lib/seo";
 import styles from "../inner-page.module.css";
 
 const restoringImages = getPagePhotoUrls("restoring-project");
 const restoringFeatureImages = getPagePhotoUrls("restoring-project");
+
+export const metadata: Metadata = {
+  title: "Restoring The Moment | Salt Lake City Photographer",
+  description:
+    "Artistic historical-site photography project by Xan's Eye Photography, based in Salt Lake City, Utah.",
+  keywords: [...saltLakePhotographerKeywords, "Salt Lake City artistic photographer", "Utah historical site photography"],
+  alternates: {
+    canonical: "/restoring-project",
+  },
+};
 
 export default function RestoringProjectPage() {
   return (

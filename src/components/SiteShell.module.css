@@ -9,31 +9,21 @@
 .header {
   width: min(var(--site-width), calc(100vw - 32px));
   margin: 20px auto 0;
-  padding: 28px 28px 22px;
+  padding: 4px 0 0;
   display: grid;
   justify-items: center;
-  gap: 20px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 32px;
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(14px);
+  gap: 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
   position: relative;
-  overflow: hidden;
-}
-
-.header::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.65), transparent 42%),
-    radial-gradient(circle at bottom right, rgba(127, 98, 80, 0.06), transparent 40%);
-  pointer-events: none;
+  overflow: visible;
 }
 
 .brandWrap {
-  width: min(360px, 72vw);
+  width: min(588px, 100%);
   position: relative;
   z-index: 1;
 }
@@ -42,14 +32,7 @@
   width: 100%;
   height: auto;
   display: block;
-  filter: drop-shadow(0 8px 14px rgba(56, 39, 25, 0.08));
-}
-
-.rule {
-  width: min(280px, 64vw);
-  border-top: 1px solid var(--line);
-  position: relative;
-  z-index: 1;
+  filter: none;
 }
 
 .navList {
@@ -67,6 +50,7 @@
   letter-spacing: 0.18em;
   position: relative;
   z-index: 1;
+  margin-top: 2px;
 }
 
 .navList a {
@@ -107,8 +91,8 @@
 
 @media (max-width: 850px) {
   .header {
-    padding: 22px 18px 18px;
-    gap: 18px;
+    padding: 2px 0 0;
+    gap: 8px;
   }
 
   .navList {
@@ -119,14 +103,13 @@
   }
 
   .brandWrap {
-    width: min(320px, 84vw);
+    width: min(456px, 100%);
   }
 }
 
 @media (max-width: 640px) {
   .header {
     width: min(var(--site-width), calc(100vw - 20px));
-    border-radius: 24px;
   }
 
   .content {

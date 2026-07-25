@@ -1,10 +1,27 @@
 import { SiteShell } from "@/components/SiteShell";
+import type { Metadata } from "next";
 import { AutoGallerySlideshow } from "@/components/AutoGallerySlideshow";
 import { getPagePhotoUrls } from "@/lib/pagePhotos";
+import { saltLakePhotographerKeywords } from "@/lib/seo";
 import styles from "../inner-page.module.css";
 
 const weddingImages = getPagePhotoUrls("weddings");
 const weddingFeatureImages = getPagePhotoUrls("weddings-featured");
+
+export const metadata: Metadata = {
+  title: "Salt Lake City Wedding, Engagement, and Elopement Photographer",
+  description:
+    "Wedding photography coverage in Salt Lake City, including engagements, elopements, and full wedding day storytelling by Xan's Eye Photography.",
+  keywords: [
+    ...saltLakePhotographerKeywords,
+    "Salt Lake City wedding packages",
+    "engagement Salt Lake City photographer",
+    "elopement Salt Lake City photographer",
+  ],
+  alternates: {
+    canonical: "/weddings",
+  },
+};
 
 export default function WeddingsPage() {
   return (

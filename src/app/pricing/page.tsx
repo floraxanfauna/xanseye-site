@@ -1,11 +1,29 @@
 import { SiteShell } from "@/components/SiteShell";
+import type { Metadata } from "next";
 import { AutoGallerySlideshow } from "@/components/AutoGallerySlideshow";
 import { getPagePhotoUrls } from "@/lib/pagePhotos";
+import { saltLakePhotographerKeywords } from "@/lib/seo";
 import styles from "../inner-page.module.css";
 
 const pricingImages = getPagePhotoUrls("pricing");
 const pricingImagesAlt = [...pricingImages].reverse();
 const pricingFeatureImages = getPagePhotoUrls("pricing-featured");
+
+export const metadata: Metadata = {
+  title: "Salt Lake City Photographer Pricing",
+  description:
+    "View Salt Lake City photography pricing for families, newborn, maternity, couples, business headshots, and wedding-related sessions.",
+  keywords: [
+    ...saltLakePhotographerKeywords,
+    "Salt Lake City photographer pricing",
+    "Salt Lake City headshot photographer",
+    "Salt Lake City family photos",
+    "Salt Lake City newborn photography pricing",
+  ],
+  alternates: {
+    canonical: "/pricing",
+  },
+};
 
 export default function PricingPage() {
   return (

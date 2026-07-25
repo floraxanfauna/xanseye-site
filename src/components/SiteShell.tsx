@@ -23,15 +23,14 @@ export function SiteShell({ currentPath, children }: SiteShellProps) {
       <header className={styles.header}>
         <div className={styles.brandWrap}>
           <Image
-            src="/brand-assets/logo_primary.png"
+            src="/brand-assets/XanseyeWebsiteBannerLogo.png"
             alt="Xan's Eye Photography"
-            width={2624}
-            height={1847}
+            width={3000}
+            height={1300}
             className={styles.brand}
             priority
           />
         </div>
-        <div className={styles.rule} />
         <nav>
           <ul className={styles.navList}>
             {navItems.map((item) => {

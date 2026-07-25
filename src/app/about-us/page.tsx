@@ -1,11 +1,23 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { SiteShell } from "@/components/SiteShell";
 import { AutoGallerySlideshow } from "@/components/AutoGallerySlideshow";
 import { getPagePhotoUrls } from "@/lib/pagePhotos";
+import { saltLakePhotographerKeywords } from "@/lib/seo";
 import styles from "../inner-page.module.css";
 
 const aboutImages = getPagePhotoUrls("about-us");
+
+export const metadata: Metadata = {
+  title: "About Xan | Salt Lake City Photographer",
+  description:
+    "Meet Xan, a Salt Lake City photographer with 15+ years of experience in wedding, newborn, engagement, and editorial-style photography.",
+  keywords: [...saltLakePhotographerKeywords, "about Salt Lake City photographer", "Utah photographer bio"],
+  alternates: {
+    canonical: "/about-us",
+  },
+};
 
 export default function AboutPage() {
   return (

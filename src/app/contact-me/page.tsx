@@ -1,10 +1,27 @@
 import { SiteShell } from "@/components/SiteShell";
+import type { Metadata } from "next";
 import { AutoGallerySlideshow } from "@/components/AutoGallerySlideshow";
 import { ContactInquiryForm } from "@/components/ContactInquiryForm";
+import { EmailVerificationReveal } from "@/components/EmailVerificationReveal";
 import { getPagePhotoUrls } from "@/lib/pagePhotos";
+import { saltLakePhotographerKeywords } from "@/lib/seo";
 import styles from "../inner-page.module.css";
 
 const contactFeatureImages = getPagePhotoUrls("contact-me");
+
+export const metadata: Metadata = {
+  title: "Contact | Salt Lake City Photographer",
+  description:
+    "Contact Xan's Eye Photography for Salt Lake City wedding, newborn, content, social media, engagement, elopement, and movie set photography.",
+  keywords: [
+    ...saltLakePhotographerKeywords,
+    "book Salt Lake City photographer",
+    "Salt Lake City photography inquiry",
+  ],
+  alternates: {
+    canonical: "/contact-me",
+  },
+};
 
 export default function ContactPage() {
   return (
@@ -39,6 +56,8 @@ export default function ContactPage() {
           className={styles.accentSlideshow}
           intervalMs={3600}
         />
+
+        <EmailVerificationReveal />
       </main>
     </SiteShell>
   );

@@ -437,6 +437,20 @@
   max-width: 48ch;
 }
 
+.movieSetExperience {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.movieSetExperienceImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+}
+
 @media (max-width: 960px) {
   .trustRow {
     grid-template-columns: 1fr;
@@ -501,5 +515,9 @@
 
   .videoFrame {
     border-radius: 22px;
+  }
+
+  .movieSetExperienceImage {
+    border-radius: 14px;
   }
 }

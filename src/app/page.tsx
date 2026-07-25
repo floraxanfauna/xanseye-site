@@ -1,13 +1,26 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { SiteShell } from "@/components/SiteShell";
 import { AutoGallerySlideshow } from "@/components/AutoGallerySlideshow";
+import { EmailVerificationReveal } from "@/components/EmailVerificationReveal";
 import { getPagePhotoUrls } from "@/lib/pagePhotos";
+import { commonSaltLakeSearchIntents, saltLakePhotographerKeywords } from "@/lib/seo";
 import Image from "next/image";
 import styles from "./page.module.css";
 
 const youtubeId = "J1Sj2BqJtGw";
 const homeImages = getPagePhotoUrls("home");
 const homeFeatureImages = getPagePhotoUrls("home-featured");
+
+export const metadata: Metadata = {
+  title: "Salt Lake City Wedding, Newborn, and Content Photographer",
+  description:
+    "Xan's Eye Photography serves Salt Lake City with wedding, engagement, elopement, newborn, content, social media, and movie set photography.",
+  keywords: [...saltLakePhotographerKeywords, ...commonSaltLakeSearchIntents],
+  alternates: {
+    canonical: "/",
+  },
+};
 
 export default function Home() {
   return (
@@ -16,7 +29,7 @@ export default function Home() {
         <section className={styles.intro}>
           <h1 className={styles.introTitle}>Utah Based and World Traveling Destination Photograper</h1>
           <p className={styles.introSubtitle}>
-            Professional Wedding, Family, Newborn, and Commercial Photography
+            Professional Wedding, Family, Newborn, Commercial Photography, and Movie Set Production Still Photography
           </p>
         </section>
 
@@ -24,6 +37,7 @@ export default function Home() {
           images={homeImages}
           label="Home gallery"
           className={styles.homeSlideshow}
+          intervalMs={3680}
           heroStyle
           showArrows
           pinFirstKeyword="FIRSTPHOTO"
@@ -148,6 +162,18 @@ export default function Home() {
           <Link href="/contact-me" className={styles.primaryAction}>
             Book Your Consultation
           </Link>
+        </section>
+
+        <EmailVerificationReveal />
+
+        <section className={styles.movieSetExperience}>
+          <Image
+            src="/page-photos/home/movie-set-experience.png"
+            alt="Xan's movie set experience"
+            width={2048}
+            height={1166}
+            className={styles.movieSetExperienceImage}
+          />
         </section>
       </main>
     </SiteShell>

@@ -1,0 +1,40 @@
+export const siteUrl = "https://xanseye.com";
+
+export const saltLakePhotographerKeywords = [
+  "Salt Lake City photographer",
+  "Salt Lake City photography",
+  "Salt Lake City wedding photographer",
+  "Salt Lake City engagement photographer",
+  "Salt Lake City elopement photographer",
+  "Salt Lake City newborn photographer",
+  "Salt Lake City content photographer",
+  "Salt Lake City social media photographer",
+  "Salt Lake City branding photographer",
+  "Salt Lake City commercial photographer",
+  "Salt Lake City family photographer",
+  "Salt Lake City maternity photographer",
+  "Salt Lake City event photographer",
+  "movie set photographer",
+  "film set photographer",
+  "Utah wedding photographer",
+  "Utah photographer",
+  "professional photographer Salt Lake City",
+  "best photographer in Salt Lake City",
+  "affordable photographer Salt Lake City",
+  "photo shoot Salt Lake City",
+  "engagement photos Salt Lake City",
+  "elopement photography Salt Lake City",
+  "newborn photos Salt Lake City",
+  "social media content photography Salt Lake City",
+];
+
+export const commonSaltLakeSearchIntents = [
+  "wedding photographer near me",
+  "engagement photographer near me",
+  "newborn photographer near me",
+  "family photographer near me",
+  "headshot photographer Salt Lake City",
+  "branding photographer near me",
+  "event photographer near me",
+  "content creator photographer Salt Lake City",
+];
