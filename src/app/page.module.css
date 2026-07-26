@@ -443,6 +443,10 @@
   max-width: 48ch;
 }
 
+.finalCtaSpacer {
+  height: clamp(54px, 9vw, 120px);
+}
+
 .movieSetExperience {
   width: min(1180px, 100%);
   margin: 0 auto;

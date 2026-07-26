@@ -153,16 +153,7 @@ export default function Home() {
           </a>
         </section>
 
-        <section className={styles.finalCta}>
-          <p className={styles.finalCtaEyebrow}>Ready to Begin?</p>
-          <h3 className={styles.finalCtaTitle}>Let&apos;s Plan a Session That Feels Like You</h3>
-          <p className={styles.finalCtaBody}>
-            Tell me your vision, timeline, and location. I&apos;ll guide the rest.
-          </p>
-          <Link href="/contact-me" className={styles.primaryAction}>
-            Book Your Consultation
-          </Link>
-        </section>
+        <section className={styles.finalCtaSpacer} aria-hidden="true" />
 
         <EmailVerificationReveal />
 

@@ -49,6 +49,24 @@ export function SiteShell({ currentPath, children }: SiteShellProps) {
       </header>
 
       <div className={styles.content}>{children}</div>
+
+      <footer className={styles.footerNav}>
+        <nav aria-label="Footer navigation">
+          <ul className={styles.bottomNavList}>
+            {navItems.map((item) => {
+              const isCurrent = item.href === currentPath;
+
+              return (
+                <li key={`footer-${item.label}`}>
+                  <Link href={item.href} className={isCurrent ? styles.bottomActive : undefined}>
+                    {item.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      </footer>
     </div>
   );
 }
