@@ -101,6 +101,12 @@
   border: 1px solid rgba(95, 74, 58, 0.2);
 }
 
+.pricingHeroAction {
+  color: var(--accent-strong);
+  background: rgba(233, 241, 230, 0.96);
+  border: 1px solid rgba(109, 132, 102, 0.34);
+}
+
 .primaryAction:hover,
 .secondaryAction:hover {
   transform: translateY(-1px);

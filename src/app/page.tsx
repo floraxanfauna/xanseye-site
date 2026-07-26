@@ -45,7 +45,7 @@ export default function Home() {
 
         <section className={styles.homeActionBand}>
           <div className={styles.heroActions}>
-            <Link href="/pricing" className={styles.primaryAction}>
+            <Link href="/pricing" className={`${styles.primaryAction} ${styles.pricingHeroAction}`}>
               View Pricing
             </Link>
             <Link href="/contact-me" className={styles.secondaryAction}>
