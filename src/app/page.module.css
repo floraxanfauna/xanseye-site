@@ -451,6 +451,14 @@
   box-shadow: var(--shadow-soft);
 }
 
+.movieSetDesktopImage {
+  display: block;
+}
+
+.movieSetMobileImage {
+  display: none;
+}
+
 @media (max-width: 960px) {
   .trustRow {
     grid-template-columns: 1fr;
@@ -477,6 +485,14 @@
 
   .introTitle {
     font-size: clamp(1.45rem, 7.65vw, 2.08rem);
+  }
+
+  .introSubtitle {
+    white-space: normal;
+    max-width: min(96vw, 34ch);
+    line-height: 1.5;
+    text-wrap: balance;
+    margin-inline: auto;
   }
 
   .heroActions {
@@ -519,5 +535,13 @@
 
   .movieSetExperienceImage {
     border-radius: 14px;
+  }
+
+  .movieSetDesktopImage {
+    display: none;
+  }
+
+  .movieSetMobileImage {
+    display: block;
   }
 }

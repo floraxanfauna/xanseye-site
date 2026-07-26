@@ -172,7 +172,14 @@ export default function Home() {
             alt="Xan's movie set experience"
             width={2048}
             height={1166}
-            className={styles.movieSetExperienceImage}
+            className={`${styles.movieSetExperienceImage} ${styles.movieSetDesktopImage}`}
+          />
+          <Image
+            src="/xansetexperienceMOBILE.png"
+            alt="Xan's movie set experience"
+            width={1155}
+            height={2000}
+            className={`${styles.movieSetExperienceImage} ${styles.movieSetMobileImage}`}
           />
         </section>
       </main>

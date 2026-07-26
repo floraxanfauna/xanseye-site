@@ -100,12 +100,14 @@ export function AutoGallerySlideshow({
       return;
     }
 
-    const timer = window.setInterval(() => {
-      setActiveIndex((current) => (current + 1) % safeImages.length);
-    }, intervalMs);
+    const slideDelay = activeSlideIndex === 0 ? intervalMs * 2 : intervalMs;
 
-    return () => window.clearInterval(timer);
-  }, [intervalMs, safeImages]);
+    const timer = window.setTimeout(() => {
+      setActiveIndex((current) => (current + 1) % safeImages.length);
+    }, slideDelay);
+
+    return () => window.clearTimeout(timer);
+  }, [activeSlideIndex, intervalMs, safeImages.length]);
 
   if (safeImages.length === 0) {
     return (
