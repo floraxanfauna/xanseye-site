@@ -30,12 +30,18 @@ export async function generateMetadata({ searchParams }: { searchParams: SP }): 
 
 export default async function MiniSessions({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
-  const r = await resolve(sp);
+  let r: Awaited<ReturnType<typeof resolve>> = null;
+  try {
+    r = await resolve(sp);
+  } catch (e) {
+    // Database not connected yet: show the friendly page instead of an error, and say why in the server log.
+    console.error("[mini-sessions] page unavailable:", e instanceof Error ? e.message : e);
+  }
   if (!r) {
     return (
       <main className="wrap" style={{ padding: "80px 0", textAlign: "center" }}>
-        <h1>Mini sessions are between seasons</h1>
-        <p className="muted">There's nothing open to book right now. Please check back soon.</p>
+        <h1>Mini sessions are opening soon</h1>
+        <p className="muted">Booking isn't open yet. Please check back soon.</p>
       </main>
     );
   }
