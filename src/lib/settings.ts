@@ -1,4 +1,5 @@
 import { getDb, type Q } from "./db";
+import { DEFAULT_SCHEDULE, type Schedule } from "./schedule";
 
 export interface ChecklistItem { key: string; label: string }
 
@@ -21,9 +22,11 @@ export interface AppSettings {
   retentionDraftDays: number;
   postChecklist: ChecklistItem[];
   prepChecklist: ChecklistItem[];
+  schedule: Schedule;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  schedule: DEFAULT_SCHEDULE,
   demoMode: true,
   paused: false,
   timezone: "America/Denver",

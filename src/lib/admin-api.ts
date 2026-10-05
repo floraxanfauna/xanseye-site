@@ -3,7 +3,9 @@ import { getDb } from "./db";
 import { AppError, addTask, audit, enqueue } from "./core";
 import { getSettings, saveSettings, type AppSettings } from "./settings";
 import { archiveSeason, createSeason, duplicateSeason, getSeason, listSeasons, listVersions, publishSeason, restoreVersion, saveDraft, unpublishSeason } from "./seasons";
-import { closeSlots, listOwnerSlots, previewPlan, publishSlots, reopenSlots } from "./availability";
+import { closeSlots, listOwnerSlots, previewPlan, publishSlots, reopenSlots, publishPlanned } from "./availability";
+import { planSchedule, validateSchedule, type Schedule } from "./schedule";
+import { addDays } from "./time";
 import { cancelBooking, getBookingView, rescheduleBooking, balanceSummary } from "./booking";
 import { retryJob } from "./outbox";
 import { revokeAllAccess } from "./access";
@@ -239,3 +241,72 @@ export async function exportAll() {
     audit: await t(`select * from audit_events order by id`),
   };
 }
+
+// ---------------------------------------------------------------- weekly schedule (Calendly-style)
+
+export async function getSchedule() { return (await getSettings()).schedule; }
+
+export async function saveSchedule(raw: unknown): Promise<Schedule> {
+  let sch: Schedule;
+  try { sch = validateSchedule(raw); } catch (e: any) {
+    throw new AppError("invalid", e?.issues ? e.issues.map((i: any) => `${i.path.join(".")}: ${i.message}`).join("; ") : e.message, 422);
+  }
+  if (sch.seasonId && !(await getSeason(sch.seasonId))) throw new AppError("invalid", "Choose a season for these times.", 422);
+  await saveSettings({ schedule: sch });
+  return sch;
+}
+
+function windowFor(s: AppSettings, sch: Schedule, now = new Date()) {
+  const today = localDate(now, s.timezone);
+  const from = sch.windowFrom && sch.windowFrom > today ? sch.windowFrom : today;
+  const horizonEnd = localDate(new Date(now.getTime() + s.horizonDays * 86400_000), s.timezone);
+  const to = sch.windowTo && sch.windowTo < horizonEnd ? sch.windowTo : horizonEnd;
+  return { from, to };
+}
+
+/** What the weekly schedule would produce, with how many of those times are already published. */
+export async function previewSchedule(raw?: unknown) {
+  const s = await getSettings();
+  const sch = raw ? validateSchedule(raw) : s.schedule;
+  const { from, to } = windowFor(s, sch);
+  const days = planSchedule(sch, s.timezone, from, to);
+  const db = await getDb();
+  const existing = sch.seasonId
+    ? (await db.query(`select starts_at from slots where season_id=$1 and state='open' and starts_at > now()`, [sch.seasonId])).rows.map((r) => r.starts_at.getTime())
+    : [];
+  const have = new Set(existing);
+  return {
+    from, to, timezone: s.timezone,
+    days: days.map((d) => ({
+      date: d.date, source: d.source, error: d.error,
+      slots: d.slots.map((x) => ({ startsAt: x.startsAt.toISOString(), endsAt: x.endsAt.toISOString(), published: have.has(x.startsAt.getTime()) })),
+    })),
+  };
+}
+
+export async function publishSchedule(body: { seasonId?: string; replaceUnbooked?: boolean }, actor: Actor) {
+  const s = await getSettings();
+  const sch = s.schedule;
+  const seasonId = body.seasonId ?? sch.seasonId;
+  if (!seasonId) throw new AppError("invalid", "Choose which season these times belong to.", 422);
+  const { from, to } = windowFor(s, sch);
+  const days = planSchedule(sch, s.timezone, from, to);
+  const bad = days.find((d) => d.error);
+  if (bad) throw new AppError("invalid", `${bad.date}: ${bad.error}`, 422);
+  const r = await publishPlanned(seasonId, days, actor.email, { replaceUnbooked: !!body.replaceUnbooked });
+  if (sch.seasonId !== seasonId) await saveSettings({ schedule: { ...sch, seasonId } });
+  return r;
+}
+
+/** Called by the worker once a day: keeps newly-arriving dates filled for owners who switched on auto-fill. */
+export async function autoFillSchedule() {
+  const s = await getSettings();
+  const sch = s.schedule;
+  if (!sch.autoFill || !sch.seasonId) return null;
+  const season = await getSeason(sch.seasonId);
+  if (!season || season.status !== "published") return null;
+  const { from, to } = windowFor(s, sch);
+  return publishPlanned(sch.seasonId, planSchedule(sch, s.timezone, from, to).filter((d) => !d.error), "auto-fill", { quiet: true });
+}
+
+export { addDays };

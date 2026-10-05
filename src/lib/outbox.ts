@@ -91,6 +91,7 @@ export async function scheduleDaily(now = new Date()) {
   if (lp.getHours() * 60 + lp.getMinutes() < hh * 60 + mm) return;
   const { start, end } = localDayRange(today, s.timezone);
   const n = (await db.query(`select count(*)::int as n from bookings where status='confirmed' and starts_at >= $1 and starts_at < $2`, [start, end])).rows[0].n;
+  await import("./admin-api").then((m) => m.autoFillSchedule()).catch((e) => logError("autofill", e));
   if (n > 0) await enqueue(db, { kind: "email.owner_run_sheet", bookingId: null, dedupeKey: `runsheet:${today}`, payload: { date: today } });
   const last = (await db.query(`select checked_at from integrations where provider='google'`)).rows[0];
   if (last && (!last.checked_at || now.getTime() - new Date(last.checked_at).getTime() > 24 * 3600_000)) await googleHealthCheck().catch(() => {});

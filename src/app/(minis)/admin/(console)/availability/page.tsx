@@ -1,2 +1,2 @@
-import AvailabilityView from "@/components/admin/AvailabilityView";
-export default function Page() { return <AvailabilityView />; }
+import AvailabilityTabs from "@/components/admin/AvailabilityTabs";
+export default function Page() { return <AvailabilityTabs />; }

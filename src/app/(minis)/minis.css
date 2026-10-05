@@ -208,3 +208,5 @@
 .xm .card { box-shadow: none; border-color: #999; break-inside: avoid; }
 .xm .admin-main { padding: 0; }
 }
+
+.xm .choice[style*="width"] span { width: 100%; }

@@ -7,7 +7,7 @@ import { formatTime, formatDateShort } from "@/lib/time";
 
 type Brk = { start: string; end: string };
 
-export default function AvailabilityView() {
+export default function AvailabilityView({ embedded }: { embedded?: boolean }) {
   const { show, node } = useToast();
   const [seasons, setSeasons] = useState<any[]>([]);
   const [seasonId, setSeasonId] = useState("");
@@ -74,8 +74,7 @@ export default function AvailabilityView() {
   return (
     <div className="stack">
       {node}
-      <h1>Availability</h1>
-      <p className="muted" style={{ marginTop: -8 }}>Only times you publish here can be booked. Free time on your calendar is never made public automatically.</p>
+      {!embedded && <h1>Availability</h1>}
       <div className="grid-2">
         <section className="card stack" aria-labelledby="pick-h">
           <h2 id="pick-h" style={{ fontSize: "1.4rem", margin: 0 }}>1. Pick dates</h2>

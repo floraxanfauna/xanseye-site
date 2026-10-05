@@ -24,6 +24,8 @@ export const GET = handle(async (req: NextRequest, ctx: Ctx) => {
   const q = req.nextUrl.searchParams;
   const [a, b, c] = p;
   if (a === "overview") return json(await A.overview());
+  if (a === "schedule" && !b) return json({ schedule: await A.getSchedule() });
+  if (a === "schedule" && b === "preview") return json(await A.previewSchedule());
   if (a === "export") {
     const data = await A.exportAll();
     return new Response(JSON.stringify(data, null, 2), { headers: { "Content-Type": "application/json", "Content-Disposition": `attachment; filename="xanseye-minis-export-${new Date().toISOString().slice(0, 10)}.json"`, "Cache-Control": "no-store" } });
@@ -78,6 +80,8 @@ export const POST = handle(async (req: NextRequest, ctx: Ctx) => {
     if (c === "archive") { await A.archiveSeason(b, owner.email); return json({ ok: true }); }
     if (c === "restore") return json({ season: await A.restoreVersion(b, Number(body.version), owner.email) });
   }
+  if (a === "schedule" && b === "preview") return json(await A.previewSchedule(body.schedule));
+  if (a === "schedule" && b === "publish") return json(await A.publishSchedule(body, owner));
   if (a === "slots" && b === "preview") return json({ days: await A.previewPlan(PublishSchema.parse(body)) });
   if (a === "slots" && b === "publish") return json(await A.publishSlots(PublishSchema.parse(body), owner.email));
   if (a === "slots" && b === "close") return json(await A.closeSlots(z.array(z.string().uuid()).max(500).parse(body.ids), owner.email));
@@ -106,6 +110,7 @@ export const PUT = handle(async (req: NextRequest, ctx: Ctx) => {
     const s = await A.saveDraft(b, body.content);
     return json({ season: s, contrast: contrastIssues(s.draft.colors), gaps: launchGaps(s.draft) });
   }
+  if (a === "schedule") return json({ schedule: await A.saveSchedule(body.schedule) });
   if (a === "settings") return json({ settings: await A.updateSettings(body) });
   throw new AppError("not_found", "Not found", 404);
 });

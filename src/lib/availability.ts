@@ -1,7 +1,7 @@
 import { getDb, isOverlapError, type Q } from "./db";
 import { AppError, audit } from "./core";
 import { getSettings } from "./settings";
-import { planSlots, SlotPlanError, type SlotPlanInput } from "./slots";
+import { planSlots, SlotPlanError, type PlannedSlot } from "./slots";
 import { localDate, localDayRange, isValidDate } from "./time";
 import { getBusy, overlapsBusy } from "./google/busy";
 import { getSeason } from "./seasons";
@@ -92,42 +92,70 @@ export interface PublishResult { created: number; skippedConflicts: { startsAt: 
 
 /** Publish slots. Overlaps with already-published slots or live bookings are skipped and reported, never forced. */
 export async function publishSlots(i: PublishInput, actor: string): Promise<PublishResult> {
-  const db = await getDb();
   const settings = await getSettings();
-  const season = await getSeason(i.seasonId);
-  if (!season) throw new AppError("not_found", "Season not found", 404);
   if (i.dates.length > 62) throw new AppError("too_many", "Pick at most 62 dates at a time");
-  const now = new Date();
-  const result: PublishResult = { created: 0, skippedConflicts: [] };
+  const days: { date: string; slots: PlannedSlot[] }[] = [];
   for (const date of i.dates) {
     if (!isValidDate(date)) throw new AppError("invalid", `Invalid date ${date}`);
-    let planned;
     try {
-      planned = planSlots({ date, startTime: i.startTime, endTime: i.endTime, durationMin: i.durationMin, bufferMin: i.bufferMin, breaks: i.breaks, tz: settings.timezone });
+      days.push({ date, slots: planSlots({ date, startTime: i.startTime, endTime: i.endTime, durationMin: i.durationMin, bufferMin: i.bufferMin, breaks: i.breaks, tz: settings.timezone }) });
     } catch (e) {
       if (e instanceof SlotPlanError) throw new AppError("invalid", `${date}: ${e.message}`);
       throw e;
     }
-    for (const p of planned) {
-      if (p.startsAt <= now) { result.skippedConflicts.push({ startsAt: p.startsAt.toISOString(), reason: "already in the past" }); continue; }
+  }
+  return publishPlanned(i.seasonId, days, actor);
+}
+
+export interface PublishResultX extends PublishResult { alreadyPublished: number; removed: number }
+
+/**
+ * Insert already-planned slots. Never forces anything:
+ *  - a time that already exists (open OR deliberately closed) is left alone,
+ *  - overlaps with published times or live bookings are skipped and reported,
+ *  - with replaceUnbooked, open times in the touched dates that nobody has ever booked are removed first.
+ */
+export async function publishPlanned(seasonId: string, days: { date: string; slots: PlannedSlot[] }[], actor: string, o: { replaceUnbooked?: boolean; quiet?: boolean } = {}): Promise<PublishResultX> {
+  const db = await getDb();
+  const settings = await getSettings();
+  const season = await getSeason(seasonId);
+  if (!season) throw new AppError("not_found", "Season not found", 404);
+  const now = new Date();
+  const result: PublishResultX = { created: 0, skippedConflicts: [], alreadyPublished: 0, removed: 0 };
+
+  if (o.replaceUnbooked && days.length) {
+    const lo = localDayRange(days[0].date, settings.timezone).start, hi = localDayRange(days[days.length - 1].date, settings.timezone).end;
+    const r = await db.query(
+      `delete from slots where season_id=$1 and state='open' and starts_at >= $2 and starts_at < $3 and starts_at > now()
+         and not exists (select 1 from bookings b where b.slot_id = slots.id) returning id`,
+      [seasonId, lo, hi],
+    );
+    result.removed = r.rows.length;
+  }
+
+  for (const day of days) {
+    for (const p of day.slots) {
+      if (p.startsAt <= now) { if (!o.quiet) result.skippedConflicts.push({ startsAt: p.startsAt.toISOString(), reason: "already in the past" }); continue; }
       try {
-        await db.tx(async (q) => {
+        const made = await db.tx(async (q) => {
+          const same = await q.query(`select 1 from slots where starts_at=$1 and season_id=$2`, [p.startsAt, seasonId]);
+          if (same.rows.length) return false;
           const clash = await q.query(
             `select 1 from bookings where status in ('hold','confirmed') and tstzrange(starts_at, buffer_end) && tstzrange($1::timestamptz, $2::timestamptz)`,
             [p.startsAt, p.bufferEnd],
           );
           if (clash.rows.length) throw new AppError("overlap", "overlaps a booked session");
-          await q.query(`insert into slots(season_id, starts_at, ends_at, buffer_end) values ($1,$2,$3,$4)`, [i.seasonId, p.startsAt, p.endsAt, p.bufferEnd]);
+          await q.query(`insert into slots(season_id, starts_at, ends_at, buffer_end) values ($1,$2,$3,$4)`, [seasonId, p.startsAt, p.endsAt, p.bufferEnd]);
+          return true;
         });
-        result.created++;
+        if (made) result.created++; else result.alreadyPublished++;
       } catch (e) {
-        if (isOverlapError(e) || (e instanceof AppError && e.code === "overlap"))
-          result.skippedConflicts.push({ startsAt: p.startsAt.toISOString(), reason: "overlaps an existing published time" });
+        if (isOverlapError(e) || (e instanceof AppError && e.code === "overlap")) { if (!o.quiet) result.skippedConflicts.push({ startsAt: p.startsAt.toISOString(), reason: "overlaps an existing published time" }); }
         else throw e;
       }
     }
   }
-  await audit(db, actor, "slots.publish", null, { seasonId: i.seasonId, dates: i.dates.length, created: result.created });
+  if (!o.quiet || result.created) await audit(db, actor, "slots.publish", null, { seasonId, dates: days.length, created: result.created, removed: result.removed });
   return result;
 }
 
