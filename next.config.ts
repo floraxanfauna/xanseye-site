@@ -5,8 +5,9 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite", "pg", "sharp"],
   outputFileTracingIncludes: { "/*": ["./migrations/**/*"] },
   // The built-in local database (PGlite, ~25 MB) is only for development. Production uses Postgres via DATABASE_URL,
-  // so keep it out of every serverless function to keep deploys small and fast.
-  outputFileTracingExcludes: { "/*": ["./node_modules/@electric-sql/**/*", "./.next/node_modules/@electric-sql/**/*", "./.data/**/*", "./tests/**/*", "./public/sample-photos/**/*"] },
+  // so keep it out of every serverless function to keep deploys small and fast. Files in /public are served by the CDN, never read by
+  // functions, so they are excluded too (otherwise a computed file path can drag the whole ~1 GB photo folder into a function).
+  outputFileTracingExcludes: { "/*": ["./node_modules/@electric-sql/**/*", "./.next/node_modules/@electric-sql/**/*", "./.data/**/*", "./tests/**/*", "./public/**/*"] },
   async headers() {
     return [
       {
