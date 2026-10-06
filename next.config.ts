@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   // Mini-session booking system: native/WASM packages must not be bundled, and the SQL migrations must ship with the server.
   serverExternalPackages: ["@electric-sql/pglite", "pg", "sharp"],
   outputFileTracingIncludes: { "/*": ["./migrations/**/*"] },
+  // The built-in local database (PGlite, ~25 MB) is only for development. Production uses Postgres via DATABASE_URL,
+  // so keep it out of every serverless function to keep deploys small and fast.
+  outputFileTracingExcludes: { "/*": ["./node_modules/@electric-sql/**/*", "./.next/node_modules/@electric-sql/**/*", "./.data/**/*", "./tests/**/*", "./public/sample-photos/**/*"] },
   async headers() {
     return [
       {
