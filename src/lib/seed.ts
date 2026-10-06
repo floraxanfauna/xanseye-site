@@ -8,6 +8,17 @@ import { defaultContent } from "./content";
 import { publishSlots } from "./availability";
 import { addDays, localDate } from "./time";
 import { saveAsset } from "./assets";
+import { appUrl } from "./util";
+
+/** Read a bundled sample file from disk, or (on serverless hosts where /public isn't in the function) fetch it from the site itself. */
+async function sampleFile(rel: string): Promise<Buffer | null> {
+  const f = path.join(process.cwd(), "public", rel);
+  if (fs.existsSync(f)) return fs.readFileSync(f);
+  try {
+    const r = await fetch(`${appUrl()}/${rel}`);
+    return r.ok ? Buffer.from(await r.arrayBuffer()) : null;
+  } catch { return null; }
+}
 
 /** Demo content so the owner can see a working page on day one. Everything here is clearly labeled demo. */
 export async function seedDemo(opts: { slots?: boolean; photos?: boolean } = {}) {
@@ -18,7 +29,6 @@ export async function seedDemo(opts: { slots?: boolean; photos?: boolean } = {})
 
   const photos: { assetId: string; alt: string }[] = [];
   if (opts.photos !== false) {
-    const dir = path.join(process.cwd(), "public", "sample-photos");
     const alts = [
       "Sample photo: a couple and their toddler sitting on the ground in autumn light",
       "Sample photo: parents and two daughters walking through fall foliage",
@@ -27,18 +37,16 @@ export async function seedDemo(opts: { slots?: boolean; photos?: boolean } = {})
       "Sample photo: a family walking along a mountain trail",
       "Sample photo: a large family gathered under a big oak tree",
     ];
-    if (fs.existsSync(dir)) {
-      const files = fs.readdirSync(dir).filter((f) => f.endsWith(".jpg")).sort();
-      for (const [i, f] of files.entries()) {
-        const a = await saveAsset(fs.readFileSync(path.join(dir, f)), { alt: alts[i] ?? "Sample photo", isDemo: true });
-        photos.push({ assetId: a.id, alt: alts[i] ?? "Sample photo" });
-      }
+    for (let i = 1; i <= 6; i++) {
+      const buf = await sampleFile(`sample-photos/demo-${i}.jpg`);
+      if (!buf) continue;
+      try { const a = await saveAsset(buf, { alt: alts[i - 1], isDemo: true }); photos.push({ assetId: a.id, alt: alts[i - 1] }); } catch (e) { console.error("[seed] photo skipped:", e instanceof Error ? e.message : e); }
     }
   }
 
-  const logoFile = path.join(process.cwd(), "public", "xanseye-logo-trim.png");
   let logoAssetId: string | null = null;
-  if (fs.existsSync(logoFile)) logoAssetId = (await saveAsset(fs.readFileSync(logoFile), { alt: "Xan's Eye Photography logo", isDemo: false, keepPng: true })).id;
+  const logo = await sampleFile("xanseye-logo-trim.png");
+  if (logo) { try { logoAssetId = (await saveAsset(logo, { alt: "Xan's Eye Photography logo", isDemo: false, keepPng: true })).id; } catch { /* default logo is used */ } }
 
   const season = await createSeason("Autumn Mini Sessions");
   const c = defaultContent("Autumn Mini Sessions");
@@ -77,3 +85,11 @@ export async function seedDemo(opts: { slots?: boolean; photos?: boolean } = {})
 }
 
 export { sharp };
+
+let seeding: Promise<unknown> | null = null;
+/** First-visit setup for demo mode (DEMO_SEED=1). Safe to call often; seeds at most once. */
+export async function ensureDemoSeed() {
+  if (process.env.DEMO_SEED !== "1") return;
+  if (!seeding) seeding = seedDemo().catch((e) => { console.error("[seed] failed:", e instanceof Error ? e.message : e); seeding = null; });
+  await seeding;
+}

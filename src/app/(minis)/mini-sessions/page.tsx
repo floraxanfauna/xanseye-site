@@ -17,7 +17,8 @@ async function resolve(sp: Awaited<SP>): Promise<{ slug: string; id: string; con
     const s = await getSeason(sp.preview);
     return s ? { slug: s.slug, id: s.id, content: s.draft, preview: true } : null;
   }
-  const s = sp.season ? await getSeasonBySlug(sp.season) : await getActiveSeason();
+  let s = sp.season ? await getSeasonBySlug(sp.season) : await getActiveSeason();
+  if (!s && !sp.season) { await (await import("@/lib/seed")).ensureDemoSeed(); s = await getActiveSeason(); }
   if (!s || s.status !== "published" || !s.published) return null;
   return { slug: s.slug, id: s.id, content: s.published, preview: false };
 }
