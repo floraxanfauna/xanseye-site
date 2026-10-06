@@ -8,6 +8,7 @@ import { dollars } from "@/lib/format";
 import BookingFlow, { type BookingConfig } from "@/components/BookingFlow";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // first visit in demo mode sets up sample content
 
 type SP = Promise<{ season?: string; preview?: string }>;
 
@@ -32,9 +33,12 @@ export async function generateMetadata({ searchParams }: { searchParams: SP }): 
 export default async function MiniSessions({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   let r: Awaited<ReturnType<typeof resolve>> = null;
+  let setupNote: string | null = null;
   try {
     r = await resolve(sp);
+    if (!r) setupNote = (await import("@/lib/seed")).seedError();
   } catch (e) {
+    setupNote = e instanceof Error ? e.message.slice(0, 300) : null;
     // Database not connected yet: show the friendly page instead of an error, and say why in the server log.
     console.error("[mini-sessions] page unavailable:", e instanceof Error ? e.message : e);
   }
@@ -43,6 +47,7 @@ export default async function MiniSessions({ searchParams }: { searchParams: SP 
       <main className="wrap" style={{ padding: "80px 0", textAlign: "center" }}>
         <h1>Mini sessions are opening soon</h1>
         <p className="muted">Booking isn't open yet. Please check back soon.</p>
+        {process.env.DEMO_SEED === "1" && setupNote && <p className="small muted" style={{ maxWidth: 640, margin: "24px auto" }}>Setup note (only visible while DEMO_SEED is on): {setupNote}</p>}
       </main>
     );
   }

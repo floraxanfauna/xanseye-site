@@ -23,7 +23,10 @@ async function sampleFile(rel: string): Promise<Buffer | null> {
 export async function seedDemo(opts: { slots?: boolean; photos?: boolean } = {}) {
   const db = await getDb();
   const have = await listSeasons();
-  if (have.length) return have[0];
+  if (have.some((x) => x.status === "published")) return have.find((x) => x.status === "published")!;
+  // A previous first-visit setup may have been cut off halfway: clear its unpublished demo leftovers and start clean.
+  await db.query(`delete from seasons where name = 'Autumn Mini Sessions' and status = 'draft' and published is null`);
+  if ((await listSeasons()).length) return null; // the owner has their own drafts; never touch them
   await saveSettings({ ...DEFAULT_SETTINGS });
 
   const photos: { assetId: string; alt: string }[] = [];
@@ -36,11 +39,13 @@ export async function seedDemo(opts: { slots?: boolean; photos?: boolean } = {})
       "Sample photo: a family walking along a mountain trail",
       "Sample photo: a large family gathered under a big oak tree",
     ];
-    for (let i = 1; i <= 6; i++) {
+    const made = await Promise.all([1, 2, 3, 4, 5, 6].map(async (i) => {
       const buf = await sampleFile(`sample-photos/demo-${i}.jpg`);
-      if (!buf) continue;
-      try { const a = await saveAsset(buf, { alt: alts[i - 1], isDemo: true }); photos.push({ assetId: a.id, alt: alts[i - 1] }); } catch (e) { console.error("[seed] photo skipped:", e instanceof Error ? e.message : e); }
-    }
+      if (!buf) return null;
+      try { const a = await saveAsset(buf, { alt: alts[i - 1], isDemo: true }); return { assetId: a.id, alt: alts[i - 1] }; }
+      catch (e) { console.error("[seed] photo skipped:", e instanceof Error ? e.message : e); return null; }
+    }));
+    for (const m of made) if (m) photos.push(m);
   }
 
   let logoAssetId: string | null = null;
@@ -86,9 +91,12 @@ export async function seedDemo(opts: { slots?: boolean; photos?: boolean } = {})
 export { sharp };
 
 let seeding: Promise<unknown> | null = null;
+let lastSeedError: string | null = null;
+/** Why the last first-visit setup failed (shown only while DEMO_SEED=1, to make first launch debuggable). */
+export const seedError = () => lastSeedError;
 /** First-visit setup for demo mode (DEMO_SEED=1). Safe to call often; seeds at most once. */
 export async function ensureDemoSeed() {
   if (process.env.DEMO_SEED !== "1") return;
-  if (!seeding) seeding = seedDemo().catch((e) => { console.error("[seed] failed:", e instanceof Error ? e.message : e); seeding = null; });
+  if (!seeding) seeding = seedDemo().then((r) => { lastSeedError = null; return r; }).catch((e) => { lastSeedError = e instanceof Error ? e.message : String(e); console.error("[seed] failed:", lastSeedError); seeding = null; });
   await seeding;
 }
