@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import sharp from "sharp";
 import { getDb } from "./db";
 import { DEFAULT_SETTINGS, getSettings, saveSettings } from "./settings";
@@ -10,10 +8,11 @@ import { addDays, localDate } from "./time";
 import { saveAsset } from "./assets";
 import { appUrl } from "./util";
 
-/** Read a bundled sample file from disk, or (on serverless hosts where /public isn't in the function) fetch it from the site itself. */
+/**
+ * Sample photos are fetched from the site's own public files over HTTP. (Reading them from disk with a computed path makes
+ * the build bundle the entire /public folder into every serverless function, which breaks deploys.)
+ */
 async function sampleFile(rel: string): Promise<Buffer | null> {
-  const f = path.join(process.cwd(), "public", rel);
-  if (fs.existsSync(f)) return fs.readFileSync(f);
   try {
     const r = await fetch(`${appUrl()}/${rel}`);
     return r.ok ? Buffer.from(await r.arrayBuffer()) : null;

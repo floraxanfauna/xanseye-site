@@ -7,10 +7,7 @@ export async function register() {
   try {
     const { getDb } = await import("./lib/db");
     await getDb(); // applies pending migrations
-    if (process.env.DEMO_SEED === "1") {
-      const { seedDemo } = await import("./lib/seed");
-      await seedDemo();
-    }
+    // Demo content is created lazily on the first visit to /mini-sessions (see ensureDemoSeed), not here.
   } catch (e) {
     console.error("[mini-sessions] startup skipped:", e instanceof Error ? e.message : e);
     return;
