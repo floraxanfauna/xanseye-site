@@ -3,7 +3,13 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Mini-session booking system: native/WASM packages must not be bundled, and the SQL migrations must ship with the server.
   serverExternalPackages: ["@electric-sql/pglite", "pg", "sharp"],
-  outputFileTracingIncludes: { "/*": ["./migrations/**/*"] },
+  outputFileTracingIncludes: {
+    "/*": ["./migrations/**/*"],
+    // sharp (photo resizing) loads its native libvips library at runtime, which the file tracer can't see. Only the pages that
+    // resize photos (first-visit demo setup, and photo uploads in the dashboard) need it.
+    "/mini-sessions": ["./node_modules/@img/sharp-libvips-linux-x64/**/*", "./node_modules/@img/sharp-linux-x64/**/*"],
+    "/api/admin/**/*": ["./node_modules/@img/sharp-libvips-linux-x64/**/*", "./node_modules/@img/sharp-linux-x64/**/*"],
+  },
   // The built-in local database (PGlite, ~25 MB) is only for development. Production uses Postgres via DATABASE_URL,
   // so keep it out of every serverless function to keep deploys small and fast. Files in /public are served by the CDN, never read by
   // functions, so they are excluded too (otherwise a computed file path can drag the whole ~1 GB photo folder into a function).
