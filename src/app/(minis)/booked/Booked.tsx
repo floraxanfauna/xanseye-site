@@ -46,7 +46,7 @@ export default function Booked() {
     a.download = `mini-session-${s.ref}.txt`; a.click();
   }
 
-  const wrap = (c: React.ReactNode) => <main className="wrap" style={{ maxWidth: 680, padding: "48px 0 80px" }}><div className="card card-float stack">{c}</div></main>;
+  const wrap = (c: React.ReactNode) => <main className="wrap" style={{ maxWidth: 680, padding: "48px 0 80px" }}><div className="card card-float stack">{c}</div><p style={{ marginTop: 18 }}><a href="/">← Back to xanseye.com</a></p></main>;
 
   if (!s) return wrap(<p aria-live="polite">Checking your booking…</p>);
   if (!s.found) return wrap(<><h1>We couldn't find a booking in this browser</h1><p>If you just paid, give it a minute and refresh. If you booked on another device, use the link in your confirmation email, or <a href="/manage/recover">request a new sign-in link</a>.</p><a className="btn btn-primary" href="/mini-sessions">Back to the booking page</a></>);

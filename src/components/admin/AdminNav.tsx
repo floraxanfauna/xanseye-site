@@ -35,7 +35,8 @@ export default function AdminNav({ email }: { email: string }) {
         </nav>
         <div className="row" style={{ marginLeft: "auto" }}>
           {paused !== null && <button className={`btn btn-sm ${paused ? "btn-primary" : "btn-ghost"}`} onClick={togglePause} aria-pressed={paused}>{paused ? "▶ Resume bookings" : "⏸ Pause bookings"}</button>}
-          <a className="btn btn-ghost btn-sm" href="/mini-sessions" target="_blank" rel="noreferrer">View page ↗</a>
+          <a className="btn btn-ghost btn-sm" href="/mini-sessions" target="_blank" rel="noreferrer">View booking page ↗</a>
+          <a className="btn btn-ghost btn-sm" href="/" title="Back to the xanseye.com home page">← xanseye.com</a>
           <button className="link-btn small" onClick={out} title={email}>Sign out</button>
         </div>
       </div>

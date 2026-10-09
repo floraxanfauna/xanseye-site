@@ -1,6 +1,6 @@
 .xm {
-  --bg: #F7FAFC; --surface: #FFFFFF; --text: #27313C; --accent: #4F5C9A; --accent-text: #FFFFFF; --sage: #DCE7DC; --gold: #C6A458;
-  --accent-rgb: 79, 92, 154;
+  --bg: #F3EADB; --surface: #FBF7EE; --text: #1E2B22; --accent: #1F4D37; --accent-text: #FBF7EE; --sage: #CFE3F0; --gold: #8FB8D6;
+  --accent-rgb: 31, 77, 55;
   --muted: color-mix(in srgb, var(--text) 78%, var(--surface));   
   --line: color-mix(in srgb, var(--text) 16%, var(--surface));
   --line-strong: color-mix(in srgb, var(--text) 38%, var(--surface));
@@ -165,7 +165,7 @@
 .xm .steps-how { grid-template-columns: repeat(3, 1fr); }
 }
 .xm .steps-how .card { counter-increment: s; }
-.xm .steps-how .card::before { content: counter(s); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--gold); color: #1F1A0B; font-weight: 700; margin-bottom: 8px; }
+.xm .steps-how .card::before { content: counter(s); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--gold); color: #14231B; font-weight: 700; margin-bottom: 8px; }
 .xm .faq details { border-bottom: 1px solid var(--line); padding: 4px 0; }
 .xm .faq summary { cursor: pointer; font-weight: 600; min-height: 48px; display: flex; align-items: center; }
 .xm .site-footer { border-top: 1px solid var(--line); padding: 26px 0 40px; margin-top: 30px; color: var(--muted); font-size: .95rem; }
@@ -210,3 +210,11 @@
 }
 
 .xm .choice[style*="width"] span { width: 100%; }
+
+.xm .home-link { white-space: nowrap; }
+.xm .home-link .long { display: none; }
+@media (min-width: 560px) { .xm .home-link .long { display: inline; } .xm .home-link .short { display: none; } }
+.xm .site-header .wrap { gap: 12px; }
+@media (min-width: 820px) { .xm .site-header .wrap { gap: 24px; } }
+
+@media (max-width: 480px) { .xm .brand img { height: 44px; } .xm .header-cta { padding: 8px 12px; font-size: .9rem; white-space: nowrap; } }

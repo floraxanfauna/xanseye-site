@@ -19,6 +19,8 @@ export const ColorsSchema = z.object({
 export type Colors = z.infer<typeof ColorsSchema>;
 
 export const THEMES: Record<string, { label: string; colors: Colors }> = {
+  // Light tan page, deep forest green buttons and text accents, light blue highlights.
+  forest: { label: "Forest", colors: { bg: "#F3EADB", surface: "#FBF7EE", text: "#1E2B22", accent: "#1F4D37", accentText: "#FBF7EE", sage: "#CFE3F0", gold: "#8FB8D6" } },
   autumn: { label: "Autumn", colors: { bg: "#F7FAFC", surface: "#FFFFFF", text: "#27313C", accent: "#4F5C9A", accentText: "#FFFFFF", sage: "#DCE7DC", gold: "#C6A458" } },
   holiday: { label: "Holiday", colors: { bg: "#FBF8F6", surface: "#FFFFFF", text: "#2A2523", accent: "#8C2F39", accentText: "#FFFFFF", sage: "#DDE8DD", gold: "#C6A458" } },
   spring: { label: "Spring", colors: { bg: "#FAFBF7", surface: "#FFFFFF", text: "#27312B", accent: "#4E7A63", accentText: "#FFFFFF", sage: "#E3EEDF", gold: "#C6A458" } },
@@ -69,8 +71,8 @@ export function defaultContent(name = "Autumn Mini Sessions"): PageContent {
     headline: "A little session. A lasting memory.",
     subhead: "Choose a date, pick a time, and tell me what matters to you.",
     buttonText: "Book a mini session",
-    theme: "autumn",
-    colors: THEMES.autumn.colors,
+    theme: "forest",
+    colors: THEMES.forest.colors,
     photos: [],
     facts: { durationMin: null, sessionPriceCents: null, location: "", deliverables: "", turnaround: "" },
     depositPolicy: null,

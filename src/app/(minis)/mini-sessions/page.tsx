@@ -78,6 +78,7 @@ export default async function MiniSessions({ searchParams }: { searchParams: SP 
       <a className="skip" href="#book">Skip to booking</a>
       <header className="site-header">
         <div className="wrap">
+          <a className="btn btn-ghost btn-sm home-link" href="/" aria-label="Back to the xanseye.com home page"><span aria-hidden>←</span> <span className="long">xanseye.com</span><span className="short">Home</span></a>
           <a className="brand" href="/mini-sessions" aria-label={`${c.siteName} home`}><img src={logo} alt="" /><span className="sr-only">{c.siteName}</span></a>
           <nav className="nav" aria-label="Main">
             <a href="#book">Mini Sessions</a>
@@ -141,7 +142,7 @@ export default async function MiniSessions({ searchParams }: { searchParams: SP 
       <footer className="site-footer">
         <div className="wrap row between">
           <span>{c.siteName}</span>
-          <span>Already booked? <a href="/manage/recover">Manage your session</a></span>
+          <span><a href="/">← Back to xanseye.com</a> · Already booked? <a href="/manage/recover">Manage your session</a></span>
         </div>
       </footer>
     </div>

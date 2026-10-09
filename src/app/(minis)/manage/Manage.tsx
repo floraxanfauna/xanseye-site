@@ -51,7 +51,7 @@ export default function Manage() {
 
   async function signOut() { await fetch("/api/manage/logout", { method: "POST" }); window.location.href = "/mini-sessions"; }
 
-  const wrap = (c: React.ReactNode) => <main className="wrap" style={{ maxWidth: 780, padding: "36px 0 80px" }}>{c}</main>;
+  const wrap = (c: React.ReactNode) => <main className="wrap" style={{ maxWidth: 780, padding: "36px 0 80px" }}>{c}<p style={{ marginTop: 22 }}><a href="/">← Back to xanseye.com</a></p></main>;
   if (denied) return wrap(<div className="card stack"><h1>Please sign in again</h1><p>Your link has expired, or this browser isn't signed in.</p><a className="btn btn-primary" href="/manage/recover">Get a new sign-in link</a></div>);
   if (!me || !intake) return wrap(<p>Loading your booking…</p>);
 
