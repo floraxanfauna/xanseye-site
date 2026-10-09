@@ -4,9 +4,12 @@ import { handle, json, readJson, assertSameOrigin, clientIp, COOKIE, cookieOpts 
 import { reserveSlot } from "@/lib/booking";
 import { rateLimit } from "@/lib/access";
 import { AppError } from "@/lib/core";
+import { getSettings } from "@/lib/settings";
+import { currentOwner } from "@/lib/auth";
 
 export const POST = handle(async (req: NextRequest) => {
   assertSameOrigin(req);
+  if ((await getSettings()).demoMode && !(await currentOwner())) throw new AppError("not_open", "Booking isn't open yet.", 403); // demo mode is practice-only, for the owner
   if (!(await rateLimit(`reserve:${clientIp(req)}`, 8, 600))) throw new AppError("rate_limited", "Too many attempts. Please wait a few minutes.", 429);
   const body = await readJson(req);
   const r = await reserveSlot({ slotId: String(body.slotId ?? ""), intake: body.intake, acceptedTerms: body.acceptedTerms === true });

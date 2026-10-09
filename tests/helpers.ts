@@ -62,7 +62,7 @@ export class FakeMail {
 
 export async function setup(opts: { google?: boolean; mail?: boolean } = {}) {
   await useFreshTestDb();
-  await saveSettings({ ...DEFAULT_SETTINGS, minNoticeHours: 1 });
+  await saveSettings({ ...DEFAULT_SETTINGS, minNoticeHours: 1, demoMode: false });
   const pay = new FakePayments();
   setPaymentProvider(pay);
   const google = opts.google ? new FakeGoogle() : null;

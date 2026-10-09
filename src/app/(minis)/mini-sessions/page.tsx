@@ -18,6 +18,8 @@ async function resolve(sp: Awaited<SP>): Promise<{ slug: string; id: string; con
     const s = await getSeason(sp.preview);
     return s ? { slug: s.slug, id: s.id, content: s.draft, preview: true } : null;
   }
+  // While the site is in demo mode only the signed-in owner sees the booking page; everyone else sees "opening soon".
+  if ((await getSettings()).demoMode && !(await currentOwner())) return null;
   let s = sp.season ? await getSeasonBySlug(sp.season) : await getActiveSeason();
   if (!s && !sp.season) { await (await import("@/lib/seed")).ensureDemoSeed(); s = await getActiveSeason(); }
   if (!s || s.status !== "published" || !s.published) return null;

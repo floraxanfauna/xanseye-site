@@ -555,3 +555,11 @@
     display: block;
   }
 }
+
+.miniSessionsAction {
+  color: #f6f1e6;
+  background: linear-gradient(180deg, #2a5e45, #1f4d37);
+  border: 1px solid #1a4030;
+  box-shadow: 0 10px 24px rgba(31, 77, 55, 0.22);
+}
+.miniSessionsAction:focus-visible { outline: 2px solid #8fb8d6; outline-offset: 3px; }

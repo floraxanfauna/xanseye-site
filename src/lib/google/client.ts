@@ -2,6 +2,7 @@ import { OAuth2Client } from "google-auth-library";
 import { calendar as calendarApi } from "@googleapis/calendar";
 import { drive as driveApi } from "@googleapis/drive";
 import { docs as docsApi } from "@googleapis/docs";
+import { gmail as gmailApi } from "@googleapis/gmail";
 import { getDb } from "../db";
 import { appUrl, decrypt, encrypt } from "../util";
 import { setBusyFetcher } from "./busy";
@@ -10,6 +11,7 @@ import { setBusyFetcher } from "./busy";
  * Least-privilege scopes:
  *  - calendar.app.created : create + manage ONLY the calendar this app creates ("Xan's Eye — Mini Sessions")
  *  - calendar.calendarlist.readonly + calendar.freebusy : let the owner pick which calendars block time (read-only)
+ *  - gmail.send : send-only; the app can send its booking emails as you but cannot read any mail
  *  - drive.file : touch only Drive items this app created (folders + one Doc per booking). Cannot see the owner's other files.
  * The Docs API accepts drive.file for files the app created, so no broad "documents" scope is requested.
  */
@@ -19,6 +21,8 @@ export const CONNECT_SCOPES = [
   "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
   "https://www.googleapis.com/auth/calendar.freebusy",
   "https://www.googleapis.com/auth/drive.file",
+  // Lets the app send its notification emails from your own Gmail (send-only: it cannot read your inbox).
+  "https://www.googleapis.com/auth/gmail.send",
 ];
 export const LOGIN_SCOPES = ["openid", "email"];
 
@@ -309,5 +313,31 @@ export async function googleHealthCheck(): Promise<"not_connected" | "ok" | "nee
     const after = await getGoogleIntegration();
     if (after?.status !== "needs_reauth") await markGoogle("error", String((e as any)?.message ?? e));
     return after?.status === "needs_reauth" ? "needs_reauth" : "error";
+  }
+}
+
+
+// ---------------------------------------------------------------- Gmail (send-only)
+
+/** True when Google is connected AND the owner granted the send-only Gmail permission. */
+export async function hasGmailSend(): Promise<boolean> {
+  if (adapterOverride !== undefined) return false;
+  const row = await getGoogleIntegration();
+  if (!row || row.status !== "connected" || !row.tokens_enc) return false;
+  try { return String(JSON.parse(decrypt(row.tokens_enc)).scope ?? "").includes("gmail.send"); } catch { return false; }
+}
+
+export async function gmailAccount(): Promise<string | null> { return (await getGoogleIntegration())?.account_email ?? null; }
+
+/** Send one already-built RFC 822 message (base64url) as the connected Google account. */
+export async function gmailSendRaw(raw: string): Promise<string | null> {
+  const c = await authedClient();
+  if (!c) throw new Error("Google isn't connected");
+  try {
+    const r = await gmailApi({ version: "v1", auth: c }).users.messages.send({ userId: "me", requestBody: { raw } });
+    return r.data.id ?? null;
+  } catch (e) {
+    await noteGoogleError(e);
+    throw e;
   }
 }

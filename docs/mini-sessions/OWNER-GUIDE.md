@@ -6,3 +6,6 @@ Sign in at `/admin` with xanflorafauna@gmail.com.
 - **Sessions**: every booking, their answers, your private notes, gallery link, reschedule/cancel.
 - **Pause bookings**: top-right button.
 Anything "waiting for setup" runs by itself once Google/email is connected. Client answers are always saved first.
+
+- **Availability → Edit individual times**: pick a date, then change any single time's start, length or break; add an extra time; hide or remove one. Booked times can't be edited here (open the session to reschedule). Changes you make are remembered, so your weekly schedule won't bring a moved or removed time back.
+- **Every booking emails you** (from your connected Gmail once you allow it in Settings).

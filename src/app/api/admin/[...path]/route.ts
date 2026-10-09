@@ -17,6 +17,8 @@ const PublishSchema = z.object({
   breaks: z.array(z.object({ start: z.string(), end: z.string() })).max(6).optional(),
 });
 
+const SlotEditSchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), startTime: z.string(), durationMin: z.number().int(), bufferMin: z.number().int().optional() });
+
 /** Every admin request re-verifies the owner on the server. Writes also require a same-origin request. */
 export const GET = handle(async (req: NextRequest, ctx: Ctx) => {
   await requireOwner();
@@ -84,6 +86,9 @@ export const POST = handle(async (req: NextRequest, ctx: Ctx) => {
   if (a === "schedule" && b === "publish") return json(await A.publishSchedule(body, owner));
   if (a === "slots" && b === "preview") return json({ days: await A.previewPlan(PublishSchema.parse(body)) });
   if (a === "slots" && b === "publish") return json(await A.publishSlots(PublishSchema.parse(body), owner.email));
+  if (a === "slots" && b === "update") { const e = SlotEditSchema.parse(body); await A.updateSlot(z.string().uuid().parse(body.id), e, owner.email); return json({ ok: true }); }
+  if (a === "slots" && b === "add") { const e = SlotEditSchema.parse(body); await A.addSlot(z.string().uuid().parse(body.seasonId), e, owner.email); return json({ ok: true }); }
+  if (a === "slots" && b === "delete") return json({ result: await A.removeSlot(z.string().uuid().parse(body.id), owner.email) });
   if (a === "slots" && b === "close") return json(await A.closeSlots(z.array(z.string().uuid()).max(500).parse(body.ids), owner.email));
   if (a === "slots" && b === "reopen") return json(await A.reopenSlots(z.array(z.string().uuid()).max(500).parse(body.ids), owner.email));
   if (a === "session" && b && c) return json(await A.sessionAction(b, c, body, owner));

@@ -21,7 +21,10 @@ Docs land in: `Mini Photo Sessions / YYYY / YYYY-MM-DD - Season / Name - XE-REF 
 ## 3. Stripe
 Create account → test mode keys → set `STRIPE_SECRET_KEY`. Add webhook endpoint `https://xanseye.com/api/stripe/webhook` for events `checkout.session.completed`, `checkout.session.expired`; copy signing secret to `STRIPE_WEBHOOK_SECRET`. Run a test booking with card 4242 4242 4242 4242, then switch to live keys. Refunds are done in the Stripe dashboard (the app flags them for you).
 
-## 4. Email
+## 4. Email (easiest: send from your own Gmail)
+In Google Cloud, enable the **Gmail API** for the same project, then in the dashboard go to Settings → Google → **Reconnect Google** and allow "send email on your behalf". Booking emails then go out from xanflorafauna@gmail.com (send-only permission; the app cannot read your mail). While the site is in demo mode, only YOU are emailed; clients are never contacted.
+
+### Alternative: Resend
 Resend (or similar): verify your sending domain, set `RESEND_API_KEY` and `EMAIL_FROM` (an address on that domain). Notifications go to `xanflorafauna@gmail.com`; replies go to `EMAIL_REPLY_TO`.
 
 ## 5. Apple Calendar

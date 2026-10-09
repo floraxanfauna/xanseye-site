@@ -3,14 +3,14 @@ import { getDb } from "./db";
 import { AppError, addTask, audit, enqueue } from "./core";
 import { getSettings, saveSettings, type AppSettings } from "./settings";
 import { archiveSeason, createSeason, duplicateSeason, getSeason, listSeasons, listVersions, publishSeason, restoreVersion, saveDraft, unpublishSeason } from "./seasons";
-import { closeSlots, listOwnerSlots, previewPlan, publishSlots, reopenSlots, publishPlanned } from "./availability";
+import { closeSlots, listOwnerSlots, previewPlan, publishSlots, reopenSlots, publishPlanned, updateSlot, addSlot, removeSlot } from "./availability";
 import { planSchedule, validateSchedule, type Schedule } from "./schedule";
 import { addDays } from "./time";
 import { cancelBooking, getBookingView, rescheduleBooking, balanceSummary } from "./booking";
 import { retryJob } from "./outbox";
 import { revokeAllAccess } from "./access";
 import { contrastIssues, launchGaps } from "./content";
-import { emailStatus } from "./mail";
+import { getEmailStatus } from "./mail";
 import { stripeConfigured, getPaymentProvider } from "./payments";
 import { disconnectGoogle, getGoogleIntegration, googleConfigured, googleHealthCheck, listOwnerCalendars, saveGoogleMeta, installGoogleBusyFetcher } from "./google/client";
 import { saveAsset, listAssets, deleteAsset } from "./assets";
@@ -64,7 +64,7 @@ export async function overview() {
     now: now.toISOString(), timezone: s.timezone, settings: { paused: s.paused, demoMode: s.demoMode },
     next, today: todays, counters: { upcoming: sessionRows.length, needsAttention: tasks.length, toDeliver },
     tasks, jobs: Object.fromEntries(jobs.map((j) => [j.status, j.n])), mirrorLag,
-    integrations: integrationStatus(google),
+    integrations: await integrationStatus(google),
     launchGaps: gaps, hasPublishedSeason: !!season,
   };
 }
@@ -79,8 +79,8 @@ function cardOf(v: NonNullable<Awaited<ReturnType<typeof getBookingView>>>, s: A
   };
 }
 
-function integrationStatus(google: Awaited<ReturnType<typeof getGoogleIntegration>>) {
-  const mail = emailStatus();
+async function integrationStatus(google: Awaited<ReturnType<typeof getGoogleIntegration>>) {
+  const mail = await getEmailStatus();
   return {
     google: { configured: googleConfigured(), status: google?.status ?? "disconnected", account: google?.account_email ?? null, error: google?.last_error ?? null, calendarId: google?.meta?.calendarId ?? null, conflictCalendarIds: google?.meta?.conflictCalendarIds ?? [], checkedAt: google?.checked_at ?? null },
     stripe: { configured: stripeConfigured(), mode: getPaymentProvider().name === "demo" ? "demo" : getPaymentProvider().live ? "live" : "test" },
@@ -224,7 +224,7 @@ export async function googleAction(action: string, body: any) {
 
 export {
   addTask, createSeason, duplicateSeason, getSeason, listSeasons, listVersions, publishSeason, restoreVersion, saveDraft, unpublishSeason, archiveSeason,
-  closeSlots, listOwnerSlots, previewPlan, publishSlots, reopenSlots, listAssets, deleteAsset, contrastIssues, launchGaps, retryJob, getSettings,
+  closeSlots, listOwnerSlots, previewPlan, publishSlots, reopenSlots, updateSlot, addSlot, removeSlot, listAssets, deleteAsset, contrastIssues, launchGaps, retryJob, getSettings,
 };
 
 /** Everything needed to rebuild the business records elsewhere. No secrets, tokens or card data are stored or exported. */

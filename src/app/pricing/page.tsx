@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { AutoGallerySlideshow } from "@/components/AutoGallerySlideshow";
 import { getPagePhotoUrls } from "@/lib/pagePhotos";
 import { saltLakePhotographerKeywords } from "@/lib/seo";
+import Link from "next/link";
 import styles from "../inner-page.module.css";
 
 const pricingImages = getPagePhotoUrls("pricing");
@@ -41,6 +42,10 @@ export default function PricingPage() {
               shots as well! Please feel free to let me know if you are hoping to have a certain look
               in your photos and I&apos;d love to help make that happen! <span className={styles.pricingGreenLine}>I do not offer discounts on mini sessions.</span>
             </p>
+
+            <Link href="/mini-sessions" className={styles.pricingMiniButton}>
+              Xan&apos;s Mini Sessions
+            </Link>
 
             <p className={styles.pricingBoldBody}>
               Included in the price are the rights and a copy of ALL the digital images sent to you in

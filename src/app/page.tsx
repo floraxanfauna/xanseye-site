@@ -45,6 +45,9 @@ export default function Home() {
 
         <section className={styles.homeActionBand}>
           <div className={styles.heroActions}>
+            <Link href="/mini-sessions" className={`${styles.primaryAction} ${styles.miniSessionsAction}`}>
+              Xan&apos;s Mini Sessions
+            </Link>
             <Link href="/pricing" className={`${styles.primaryAction} ${styles.pricingHeroAction}`}>
               View Pricing
             </Link>

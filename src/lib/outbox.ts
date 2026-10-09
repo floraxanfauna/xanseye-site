@@ -4,7 +4,7 @@ import { getSettings } from "./settings";
 import { getBookingView, type BookingView } from "./booking";
 import { getSeason } from "./seasons";
 import { getGoogle } from "./google/client";
-import { sendEmail, emailStatus } from "./mail";
+import { sendEmail, getEmailStatus } from "./mail";
 import * as E from "./emails";
 import { firstNameOf } from "./intake";
 import { mintToken, manageUrl } from "./access";
@@ -45,6 +45,7 @@ export async function processOutbox(limit = 20): Promise<RunSummary> {
     [limit],
   )).rows;
 
+  claimed.sort((a, b) => Number(a.id) - Number(b.id)); // run in the order queued (e.g. the Google Doc before the email that links to it)
   const sum: RunSummary = { done: 0, blocked: 0, retried: 0, failed: 0, held };
   for (const job of claimed) {
     try {
@@ -124,6 +125,14 @@ async function runJob(job: Row): Promise<void | "deferred"> {
 async function ownerTo() { return (await getSettings()).ownerEmail; }
 
 async function deliver(job: Row, to: string, built: E.Built, bookingId: string | null) {
+  // While in demo mode the booking page is practice-only: never email anyone except the owner.
+  const st = await getSettings();
+  if (st.demoMode && to.toLowerCase() !== st.ownerEmail.toLowerCase()) {
+    const db = await getDb();
+    await db.query(`insert into notifications(outbox_id, booking_id, to_addr, subject, body_text, provider, status) values ($1,$2,$3,$4,$5,'none','suppressed_demo')`,
+      [job.id, bookingId, to, built.subject, "(not sent: demo mode only emails the owner)"]);
+    return;
+  }
   const r = await sendEmail({ to, subject: built.subject, text: built.text, html: built.html, idempotencyKey: `job-${job.id}-${job.dedupe_key}`, bookingId, outboxId: job.id });
   if (r.status === "blocked") throw new Blocked(r.reason);
 }
@@ -254,4 +263,4 @@ async function runSheetEmail(job: Row) {
   await deliver(job, await ownerTo(), E.ownerRunSheet(job.payload.date, views, s.timezone), null);
 }
 
-export { emailStatus };
+export { getEmailStatus };
