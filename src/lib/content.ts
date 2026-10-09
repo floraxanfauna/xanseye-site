@@ -29,7 +29,14 @@ export const THEMES: Record<string, { label: string; colors: Colors }> = {
 
 const faq = z.object({ q: z.string().trim().min(1).max(200), a: z.string().trim().min(1).max(2000) });
 const step = z.object({ title: z.string().trim().min(1).max(80), body: z.string().trim().min(1).max(500) });
-const photo = z.object({ assetId: z.string().uuid(), alt: z.string().trim().max(200) });
+// A photo is either an upload (assetId) or a file that ships with the site (url like /sample-photos/x.jpg).
+const photo = z.object({
+  assetId: z.string().uuid().optional(),
+  url: z.string().regex(/^\/(?!.*\.\.)[A-Za-z0-9_\-./]+\.(jpe?g|png|webp)$/i, "Use an image file on this site").optional(),
+  alt: z.string().trim().max(200),
+}).refine((p) => !!p.assetId || !!p.url, "Each photo needs an upload or a site path");
+export type Photo = z.infer<typeof photo>;
+export const photoSrc = (p: { assetId?: string; url?: string }) => (p.assetId ? `/api/assets/${p.assetId}` : p.url ?? "");
 
 export const ContentSchema = z.object({
   title: z.string().trim().min(1).max(80),              // season name, e.g. "Autumn Mini Sessions"

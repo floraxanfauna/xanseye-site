@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getActiveSeason, getSeason, getSeasonBySlug } from "@/lib/seasons";
 import { getSettings } from "@/lib/settings";
 import { currentOwner } from "@/lib/auth";
-import { cssVars, type PageContent } from "@/lib/content";
+import { cssVars, photoSrc, type PageContent } from "@/lib/content";
 import { localDate } from "@/lib/time";
 import { dollars } from "@/lib/format";
 import BookingFlow, { type BookingConfig } from "@/components/BookingFlow";
@@ -58,7 +58,7 @@ export default async function MiniSessions({ searchParams }: { searchParams: SP 
   const today = localDate(new Date(), s.timezone);
   const img = (id: string) => `/api/assets/${id}`;
   const logo = c.logoAssetId ? img(c.logoAssetId) : "/xanseye-logo-trim.png";
-  const photos = c.photos.slice(0, 3);
+  const photos = c.photos.slice(0, 4);
 
   const cfg: BookingConfig = {
     seasonSlug: r.slug, timezone: s.timezone, today, depositCents: s.depositCents, beautyEditCents: s.beautyEditCents, maxPeople: s.maxPeople, demo: s.demoMode,
@@ -100,10 +100,10 @@ export default async function MiniSessions({ searchParams }: { searchParams: SP 
               {c.subhead && <p>{c.subhead}</p>}
             </div>
             {photos.length > 0 && (
-              <div className={`hero-photos ${photos.length === 1 ? "one" : photos.length === 2 ? "two" : ""}`}>
+              <div className={`hero-photos ${["", "one", "two", "", "four"][photos.length] ?? ""}`}>
                 {photos.map((p, i) => (
-                  <figure key={p.assetId}>
-                    <img src={img(p.assetId)} alt={p.alt} loading={i === 0 ? "eager" : "lazy"} />
+                  <figure key={photoSrc(p) + i}>
+                    <img src={photoSrc(p)} alt={p.alt} loading={i === 0 ? "eager" : "lazy"} />
                     {s.demoMode && <span className="demo-tag">Sample photo</span>}
                   </figure>
                 ))}

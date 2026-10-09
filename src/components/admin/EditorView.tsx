@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { useToast } from "./Toast";
-import { THEMES, contrastIssues, launchGaps, type PageContent } from "@/lib/content";
+import { THEMES, contrastIssues, launchGaps, photoSrc, type PageContent } from "@/lib/content";
 
 const COLOR_FIELDS: [keyof PageContent["colors"], string, string][] = [
   ["bg", "Page background", "The soft color behind everything."], ["surface", "Cards", "Boxes that hold the calendar and forms."], ["text", "Text", "Main reading color."],
@@ -115,10 +115,10 @@ export default function EditorView() {
           </section>
 
           <section className="card stack"><h2 style={{ fontSize: "1.3rem", margin: 0 }}>Photos</h2>
-            <p className="hint" style={{ margin: 0 }}>The first three show at the top of your page. Use your own photos; sample photos are labeled on the page while demo mode is on.</p>
+            <p className="hint" style={{ margin: 0 }}>The first four show at the top of your page. Use your own photos; sample photos are labeled on the page while demo mode is on.</p>
             {c.photos.map((p, i) => (
-              <div className="photo-row" key={p.assetId + i}>
-                <img src={`/api/assets/${p.assetId}`} alt="" />
+              <div className="photo-row" key={photoSrc(p) + i}>
+                <img src={photoSrc(p)} alt="" />
                 <div className="field" style={{ marginBottom: 0 }}><label className="label small" htmlFor={`alt${i}`}>Describe photo {i + 1} (for screen readers)</label><input id={`alt${i}`} value={p.alt} onChange={(e) => set({ photos: c.photos.map((x, j) => (j === i ? { ...x, alt: e.target.value } : x)) })} /></div>
                 <div className="row" style={{ flexDirection: "column", gap: 4 }}>
                   <button className="btn btn-ghost btn-sm" aria-label={`Move photo ${i + 1} up`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>

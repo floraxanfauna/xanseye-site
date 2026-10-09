@@ -174,3 +174,28 @@ describe("dates, folders and midnight boundaries", () => {
     void count; void TZ;
   });
 });
+
+describe("photos on the page", () => {
+  it("accepts uploaded photos and site-hosted photos, rejects bad paths and empty entries", async () => {
+    const { ContentSchema, defaultContent, photoSrc } = await import("@/lib/content");
+    const base = defaultContent("x");
+    const up = { assetId: "3a74f84e-5fbf-4b34-9c0b-eb06ee7bd62d", alt: "upload" };
+    const site = { url: "/sample-photos/mini-1-mountain-family.jpg", alt: "site" };
+    expect(ContentSchema.safeParse({ ...base, photos: [up, site] }).success).toBe(true);
+    expect(ContentSchema.safeParse({ ...base, photos: [{ alt: "nothing" }] }).success).toBe(false);
+    expect(ContentSchema.safeParse({ ...base, photos: [{ url: "https://evil.example/x.jpg", alt: "x" }] }).success).toBe(false);
+    expect(ContentSchema.safeParse({ ...base, photos: [{ url: "/../../etc/passwd", alt: "x" }] }).success).toBe(false);
+    expect(photoSrc(up)).toBe("/api/assets/3a74f84e-5fbf-4b34-9c0b-eb06ee7bd62d");
+    expect(photoSrc(site)).toBe("/sample-photos/mini-1-mountain-family.jpg");
+  });
+
+  it("the demo season is created with the four sample photos", async () => {
+    const { useFreshTestDb } = await import("@/lib/db");
+    await useFreshTestDb();
+    const { seedDemo } = await import("@/lib/seed");
+    const pub = await seedDemo({ slots: false });
+    expect(pub!.published!.photos.map((p) => p.url)).toEqual([
+      "/sample-photos/mini-1-mountain-family.jpg", "/sample-photos/mini-2-golden-light.jpg", "/sample-photos/mini-3-jumping-kids.jpg", "/sample-photos/mini-4-garden-walk.jpg",
+    ]);
+  });
+});

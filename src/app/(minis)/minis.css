@@ -218,3 +218,8 @@
 @media (min-width: 820px) { .xm .site-header .wrap { gap: 24px; } }
 
 @media (max-width: 480px) { .xm .brand img { height: 44px; } .xm .header-cta { padding: 8px 12px; font-size: .9rem; white-space: nowrap; } }
+
+.xm .hero-photos.four { grid-template-columns: 1.5fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.xm .hero-photos.four figure:first-child { grid-row: 1 / span 2; }
+.xm .hero-photos.four figure:nth-child(4) { grid-column: 2 / span 2; }
+@media (max-width: 560px) { .xm .hero-photos.four { grid-template-columns: 1.3fr 1fr; } .xm .hero-photos.four figure:nth-child(3) { grid-column: 2; } .xm .hero-photos.four figure:nth-child(4) { grid-column: 1 / span 2; grid-row: 3; } .xm .hero-photos.four { grid-template-rows: 1fr 1fr 1fr; height: 330px; } }

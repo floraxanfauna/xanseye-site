@@ -1,23 +1,9 @@
-import sharp from "sharp";
 import { getDb } from "./db";
 import { DEFAULT_SETTINGS, getSettings, saveSettings } from "./settings";
 import { createSeason, publishSeason, saveDraft, listSeasons } from "./seasons";
 import { defaultContent } from "./content";
 import { publishSlots } from "./availability";
 import { addDays, localDate } from "./time";
-import { saveAsset } from "./assets";
-import { appUrl } from "./util";
-
-/**
- * Sample photos are fetched from the site's own public files over HTTP. (Reading them from disk with a computed path makes
- * the build bundle the entire /public folder into every serverless function, which breaks deploys.)
- */
-async function sampleFile(rel: string): Promise<Buffer | null> {
-  try {
-    const r = await fetch(`${appUrl()}/${rel}`);
-    return r.ok ? Buffer.from(await r.arrayBuffer()) : null;
-  } catch { return null; }
-}
 
 /** Demo content so the owner can see a working page on day one. Everything here is clearly labeled demo. */
 export async function seedDemo(opts: { slots?: boolean; photos?: boolean } = {}) {
@@ -29,33 +15,19 @@ export async function seedDemo(opts: { slots?: boolean; photos?: boolean } = {})
   if ((await listSeasons()).length) return null; // the owner has their own drafts; never touch them
   await saveSettings({ ...DEFAULT_SETTINGS });
 
-  const photos: { assetId: string; alt: string }[] = [];
-  if (opts.photos !== false) {
-    const alts = [
-      "Sample photo: a couple and their toddler sitting on the ground in autumn light",
-      "Sample photo: parents and two daughters walking through fall foliage",
-      "Sample photo: a family laughing together outdoors",
-      "Sample photo: a couple holding their baby by a Christmas tree",
-      "Sample photo: a family walking along a mountain trail",
-      "Sample photo: a large family gathered under a big oak tree",
-    ];
-    const made = await Promise.all([1, 2, 3, 4, 5, 6].map(async (i) => {
-      const buf = await sampleFile(`sample-photos/demo-${i}.jpg`);
-      if (!buf) return null;
-      try { const a = await saveAsset(buf, { alt: alts[i - 1], isDemo: true }); return { assetId: a.id, alt: alts[i - 1] }; }
-      catch (e) { console.error("[seed] photo skipped:", e instanceof Error ? e.message : e); return null; }
-    }));
-    for (const m of made) if (m) photos.push(m);
-  }
-
-  let logoAssetId: string | null = null;
-  const logo = await sampleFile("xanseye-logo-trim.png");
-  if (logo) { try { logoAssetId = (await saveAsset(logo, { alt: "Xan's Eye Photography logo", isDemo: false, keepPng: true })).id; } catch { /* default logo is used */ } }
+  // Sample photos ship with the site (public/sample-photos); no image processing is needed for the demo.
+  const photos: { url: string; alt: string }[] = opts.photos === false ? [] : [
+    { url: "/sample-photos/mini-1-mountain-family.jpg", alt: "Sample photo: a family of six posing together on a green mountain hillside" },
+    { url: "/sample-photos/mini-2-golden-light.jpg", alt: "Sample photo: a smiling couple with their toddler son in warm golden evening light" },
+    { url: "/sample-photos/mini-3-jumping-kids.jpg", alt: "Sample photo: five children holding hands and jumping against a white studio backdrop" },
+    { url: "/sample-photos/mini-4-garden-walk.jpg", alt: "Sample photo: a couple walking hand in hand with their young son along a shaded garden path" },
+  ];
+  const logoAssetId: string | null = null; // the default Xan's Eye logo is used
 
   const season = await createSeason("Autumn Mini Sessions");
   const c = defaultContent("Autumn Mini Sessions");
   c.logoAssetId = logoAssetId;
-  c.photos = photos.slice(0, 3);
+  c.photos = photos;
   c.demoValues = true;
   c.facts = {
     durationMin: 30, sessionPriceCents: 15000,
@@ -87,8 +59,6 @@ export async function seedDemo(opts: { slots?: boolean; photos?: boolean } = {})
   }
   return pub;
 }
-
-export { sharp };
 
 let seeding: Promise<unknown> | null = null;
 let lastSeedError: string | null = null;
