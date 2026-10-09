@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatWhen } from "@/lib/time";
 import { dollars } from "@/lib/format";
 
-interface Status { found: boolean; ref?: string; status?: string; startsAt?: string; timezone?: string; demo?: boolean; depositCents?: number; location?: string; contact?: "email" | "phone_only" | "none"; email?: boolean; emailWorks?: boolean }
+interface Status { typeName?: string | null; confirmationMessage?: string; found: boolean; ref?: string; status?: string; startsAt?: string; timezone?: string; demo?: boolean; depositCents?: number; location?: string; contact?: "email" | "phone_only" | "none"; email?: boolean; emailWorks?: boolean }
 
 export default function Booked() {
   const [s, setS] = useState<Status | null>(null);
@@ -58,7 +58,8 @@ export default function Booked() {
         {s.demo && <div className="banner banner-demo"><strong>Demo booking.</strong> No real payment was taken.</div>}
         <h1>You're booked!</h1>
         <p style={{ fontSize: "1.2rem" }}><strong>{when}</strong>{s.location ? <><br />{s.location}</> : null}</p>
-        <p className="muted">Reference <strong>{s.ref}</strong> · Deposit {s.demo ? "(demo)" : "received"}: {dollars(s.depositCents ?? 0)}</p>
+        {s.confirmationMessage && <div className="banner banner-info" style={{ whiteSpace: "pre-wrap" }}>{s.confirmationMessage}</div>}
+        <p className="muted">{s.typeName ? <>{s.typeName} · </> : null}Reference <strong>{s.ref}</strong> · Deposit {s.demo ? "(demo)" : "received"}: {dollars(s.depositCents ?? 0)}</p>
 
         {s.contact === "email" && s.emailWorks && <div className="banner banner-ok">A confirmation is on its way to your email, with a private link to update your answers any time. Check your spam folder if it doesn't show up.</div>}
         {s.contact === "email" && !s.emailWorks && <div className="banner banner-info" role="note"><strong>Email isn't switched on yet, so no confirmation email was sent.</strong> Please save your private link below.</div>}

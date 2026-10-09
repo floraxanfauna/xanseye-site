@@ -3,6 +3,7 @@ import { addTask, enqueue, type JobKind } from "./core";
 import { getSettings } from "./settings";
 import { getBookingView, type BookingView } from "./booking";
 import { getSeason } from "./seasons";
+import { getType } from "./sessiontypes";
 import { getGoogle } from "./google/client";
 import { sendEmail, getEmailStatus } from "./mail";
 import * as E from "./emails";
@@ -213,7 +214,8 @@ async function clientConfirmEmail(job: Row, b: BookingView) {
   const s = await getSettings();
   const season = await getSeason(b.seasonId);
   const link = manageUrl(await mintToken(b.id, "manage"));
-  await deliver(job, b.recoveryEmail, E.clientConfirmation(b, s.timezone, { manageLink: link, rescheduled: !!job.payload?.rescheduled, siteName: season?.published?.siteName ?? season?.draft.siteName ?? "Xan's Eye Photography", ownerEmail: s.ownerEmail }), b.id);
+  const type = b.typeId ? await getType(b.typeId) : null;
+  await deliver(job, b.recoveryEmail, E.clientConfirmation(b, s.timezone, { manageLink: link, rescheduled: !!job.payload?.rescheduled, siteName: season?.published?.siteName ?? season?.draft.siteName ?? "Xan's Eye Photography", ownerEmail: s.ownerEmail, message: type?.config.confirmationMessage, canSelfChange: !!(type?.config.allowClientReschedule || type?.config.allowClientCancel) }), b.id);
 }
 
 async function clientReminderEmail(job: Row, b: BookingView) {
@@ -221,7 +223,7 @@ async function clientReminderEmail(job: Row, b: BookingView) {
   const s = await getSettings();
   const season = await getSeason(b.seasonId);
   const link = manageUrl(await mintToken(b.id, "manage"));
-  await deliver(job, b.recoveryEmail, E.clientReminder(b, s.timezone, job.payload.hours, { manageLink: link, siteName: season?.published?.siteName ?? "Xan's Eye Photography", prep: season?.published?.prepNotes ?? "" }), b.id);
+  await deliver(job, b.recoveryEmail, E.clientReminder(b, s.timezone, job.payload.hours, { manageLink: link, siteName: season?.published?.siteName ?? "Xan's Eye Photography", prep: season?.published?.prepNotes ?? "", custom: job.payload.body ? { subject: job.payload.subject ?? "", body: job.payload.body } : undefined }), b.id);
 }
 
 async function clientVerifyEmailJob(job: Row, b: BookingView) {

@@ -11,6 +11,7 @@ type Ctx = { params: Promise<{ path: string[] }> };
 
 const PublishSchema = z.object({
   seasonId: z.string().uuid(),
+  typeId: z.string().uuid().nullish(),
   dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(62),
   startTime: z.string(), endTime: z.string(),
   durationMin: z.number().int(), bufferMin: z.number().int(),
@@ -26,8 +27,10 @@ export const GET = handle(async (req: NextRequest, ctx: Ctx) => {
   const q = req.nextUrl.searchParams;
   const [a, b, c] = p;
   if (a === "overview") return json(await A.overview());
-  if (a === "schedule" && !b) return json({ schedule: await A.getSchedule() });
-  if (a === "schedule" && b === "preview") return json(await A.previewSchedule());
+  if (a === "schedule" && !b) return json({ schedule: await A.getSchedule(z.string().uuid().parse(q.get("type"))) });
+  if (a === "schedule" && b === "preview") return json(await A.previewSchedule(z.string().uuid().parse(q.get("type"))));
+  if (a === "types") return json({ types: await A.typesOverview(q.get("season")) });
+  if (a === "type" && b) return json({ type: await A.getTypeAdmin(b) });
   if (a === "export") {
     const data = await A.exportAll();
     return new Response(JSON.stringify(data, null, 2), { headers: { "Content-Type": "application/json", "Content-Disposition": `attachment; filename="xanseye-minis-export-${new Date().toISOString().slice(0, 10)}.json"`, "Cache-Control": "no-store" } });
@@ -42,7 +45,7 @@ export const GET = handle(async (req: NextRequest, ctx: Ctx) => {
   if (a === "slots") {
     const from = q.get("from"), to = q.get("to");
     if (!from || !to) throw new AppError("invalid", "from and to are required", 422);
-    return json({ slots: await A.listOwnerSlots(q.get("season"), from, to) });
+    return json({ slots: await A.listOwnerSlots(q.get("season"), from, to, q.get("type")) });
   }
   if (a === "sessions") return json({ sessions: await A.listSessions(q.get("filter") ?? "upcoming") });
   if (a === "session" && b) return json(await A.sessionDetail(b));
@@ -82,12 +85,15 @@ export const POST = handle(async (req: NextRequest, ctx: Ctx) => {
     if (c === "archive") { await A.archiveSeason(b, owner.email); return json({ ok: true }); }
     if (c === "restore") return json({ season: await A.restoreVersion(b, Number(body.version), owner.email) });
   }
-  if (a === "schedule" && b === "preview") return json(await A.previewSchedule(body.schedule));
-  if (a === "schedule" && b === "publish") return json(await A.publishSchedule(body, owner));
+  if (a === "schedule" && b === "preview") return json(await A.previewSchedule(z.string().uuid().parse(body.type), body.schedule));
+  if (a === "schedule" && b === "publish") return json(await A.publishSchedule(z.string().uuid().parse(body.type), body, owner));
+  if (a === "types") return json({ type: await A.createTypeAdmin(z.object({ seasonId: z.string().uuid(), name: z.string().min(1).max(80), duplicateFrom: z.string().uuid().optional() }).parse(body), owner) });
+  if (a === "type" && b && c === "remove") return json({ result: await A.removeTypeAdmin(b, owner) });
+  if (a === "type" && b && c === "duplicate") return json({ type: await A.createTypeAdmin({ seasonId: String(body.seasonId), name: String(body.name ?? ""), duplicateFrom: b }, owner) });
   if (a === "slots" && b === "preview") return json({ days: await A.previewPlan(PublishSchema.parse(body)) });
   if (a === "slots" && b === "publish") return json(await A.publishSlots(PublishSchema.parse(body), owner.email));
   if (a === "slots" && b === "update") { const e = SlotEditSchema.parse(body); await A.updateSlot(z.string().uuid().parse(body.id), e, owner.email); return json({ ok: true }); }
-  if (a === "slots" && b === "add") { const e = SlotEditSchema.parse(body); await A.addSlot(z.string().uuid().parse(body.seasonId), e, owner.email); return json({ ok: true }); }
+  if (a === "slots" && b === "add") { const e = SlotEditSchema.parse(body); await A.addSlot(z.string().uuid().parse(body.seasonId), e, owner.email, body.typeId ?? null); return json({ ok: true }); }
   if (a === "slots" && b === "delete") return json({ result: await A.removeSlot(z.string().uuid().parse(body.id), owner.email) });
   if (a === "slots" && b === "close") return json(await A.closeSlots(z.array(z.string().uuid()).max(500).parse(body.ids), owner.email));
   if (a === "slots" && b === "reopen") return json(await A.reopenSlots(z.array(z.string().uuid()).max(500).parse(body.ids), owner.email));
@@ -107,7 +113,7 @@ export const POST = handle(async (req: NextRequest, ctx: Ctx) => {
 });
 
 export const PUT = handle(async (req: NextRequest, ctx: Ctx) => {
-  await requireOwner();
+  const owner = await requireOwner();
   assertSameOrigin(req);
   const [a, b, c] = (await ctx.params).path;
   const body = await readJson(req);
@@ -115,7 +121,8 @@ export const PUT = handle(async (req: NextRequest, ctx: Ctx) => {
     const s = await A.saveDraft(b, body.content);
     return json({ season: s, contrast: contrastIssues(s.draft.colors), gaps: launchGaps(s.draft) });
   }
-  if (a === "schedule") return json({ schedule: await A.saveSchedule(body.schedule) });
+  if (a === "schedule") return json({ schedule: await A.saveSchedule(z.string().uuid().parse(body.type), body.schedule) });
+  if (a === "type" && b) return json({ type: await A.updateTypeAdmin(b, z.object({ name: z.string().optional(), color: z.string().optional(), active: z.boolean().optional(), sortOrder: z.number().int().optional(), config: z.record(z.string(), z.any()).optional() }).parse(body), owner) });
   if (a === "settings") return json({ settings: await A.updateSettings(body) });
   throw new AppError("not_found", "Not found", 404);
 });

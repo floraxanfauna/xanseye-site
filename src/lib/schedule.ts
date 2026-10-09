@@ -15,6 +15,7 @@ export const ScheduleSchema = z.object({
   weekly: z.array(z.array(RangeSchema).max(4)).length(7),
   durationMin: z.number().int().min(10).max(480),
   bufferMin: z.number().int().min(0).max(240),
+  intervalMin: z.number().int().min(5).max(480).nullable().default(null), // start times every N minutes (null = length + break)
   windowFrom: z.string().nullable(),   // first date this schedule applies to
   windowTo: z.string().nullable(),     // last date (null = rolling horizon from settings)
   /** date -> custom ranges, or null = unavailable all day */
@@ -27,7 +28,7 @@ export type Schedule = z.infer<typeof ScheduleSchema>;
 export const DEFAULT_SCHEDULE: Schedule = {
   // Saturdays 10:00–12:30 as a starting example (index 6 = Saturday)
   weekly: [[], [], [], [], [], [], [{ start: "10:00", end: "12:30" }]],
-  durationMin: 30, bufferMin: 15, windowFrom: null, windowTo: null, overrides: [], seasonId: null, autoFill: false,
+  durationMin: 30, bufferMin: 15, intervalMin: null, windowFrom: null, windowTo: null, overrides: [], seasonId: null, autoFill: false,
 };
 
 export function validateSchedule(raw: unknown): Schedule {
@@ -69,7 +70,7 @@ export function planSchedule(s: Schedule, tz: string, from: string, to: string, 
     try {
       const slots: PlannedSlot[] = [];
       for (const r of ranges) {
-        slots.push(...planSlots({ date: d, startTime: r.start, endTime: r.end === "24:00" ? "00:00" : r.end, durationMin: s.durationMin, bufferMin: s.bufferMin, tz }));
+        slots.push(...planSlots({ date: d, startTime: r.start, endTime: r.end === "24:00" ? "00:00" : r.end, durationMin: s.durationMin, bufferMin: s.bufferMin, stepMin: s.intervalMin, tz }));
       }
       out.push({ date: d, slots, source: override ? "override" : "weekly" });
     } catch (e) {

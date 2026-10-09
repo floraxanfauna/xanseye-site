@@ -7,10 +7,9 @@ import { formatTime, formatDateShort } from "@/lib/time";
 
 type Brk = { start: string; end: string };
 
-export default function AvailabilityView({ embedded }: { embedded?: boolean }) {
+export default function AvailabilityView({ embedded, typeId, seasonId: seasonProp }: { embedded?: boolean; typeId: string; seasonId: string }) {
   const { show, node } = useToast();
-  const [seasons, setSeasons] = useState<any[]>([]);
-  const [seasonId, setSeasonId] = useState("");
+  const seasonId = seasonProp;
   const [tz, setTz] = useState("America/Denver");
   const now = new Date();
   const [view, setView] = useState({ y: now.getFullYear(), m: now.getMonth() + 1 });
@@ -23,27 +22,21 @@ export default function AvailabilityView({ embedded }: { embedded?: boolean }) {
   const [lastClosed, setLastClosed] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    Promise.all([api("GET", "seasons"), api("GET", "settings")]).then(([s, st]) => {
-      setSeasons(s.seasons.filter((x: any) => x.status !== "archived")); setTz(st.settings.timezone);
-      const pub = s.seasons.find((x: any) => x.status === "published") ?? s.seasons[0];
-      if (pub) setSeasonId(pub.id);
-    }).catch((e) => show(e.message, "error"));
-  }, [show]);
+  useEffect(() => { api("GET", "settings").then((st) => setTz(st.settings.timezone)).catch((e) => show(e.message, "error")); }, [show]);
 
   const loadSlots = useCallback(async () => {
     if (!seasonId) return;
     const last = new Date(Date.UTC(view.y, view.m, 0)).getUTCDate();
-    const r = await api("GET", `slots?from=${ymdOf(view.y, view.m, 1)}&to=${ymdOf(view.y, view.m, last)}`);
+    const r = await api("GET", `slots?from=${ymdOf(view.y, view.m, 1)}&to=${ymdOf(view.y, view.m, last)}&type=${typeId}`);
     setSlots(r.slots);
-  }, [seasonId, view]);
+  }, [seasonId, typeId, view]);
   useEffect(() => { loadSlots(); }, [loadSlots]);
 
   const counts = useMemo(() => { const c: Record<string, number> = {}; for (const s of slots) if (s.state === "open") c[s.date] = (c[s.date] ?? 0) + 1; return c; }, [slots]);
   const byDate = useMemo(() => { const m = new Map<string, any[]>(); for (const s of slots) m.set(s.date, [...(m.get(s.date) ?? []), s]); return [...m.entries()]; }, [slots]);
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-  const payload = () => ({ seasonId, dates: [...picked].sort(), ...form, breaks: breaks.filter((b) => b.start && b.end) });
+  const payload = () => ({ seasonId, typeId, dates: [...picked].sort(), ...form, breaks: breaks.filter((b) => b.start && b.end) });
 
   async function doPreview() {
     if (!picked.size) return show("Pick at least one date on the calendar first.", "error");
@@ -78,10 +71,6 @@ export default function AvailabilityView({ embedded }: { embedded?: boolean }) {
       <div className="grid-2">
         <section className="card stack" aria-labelledby="pick-h">
           <h2 id="pick-h" style={{ fontSize: "1.4rem", margin: 0 }}>1. Pick dates</h2>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label className="label" htmlFor="season">Season these times belong to</label>
-            <select id="season" value={seasonId} onChange={(e) => setSeasonId(e.target.value)}>{seasons.map((s) => <option key={s.id} value={s.id}>{s.name}{s.status === "draft" ? " (draft)" : ""}</option>)}</select>
-          </div>
           <Calendar mode="multi" year={view.y} month={view.m} today={today} available={counts} selected={null} multi={picked} onSelect={toggle} onMonth={(y, m) => setView({ y, m })} minMonth={{ y: now.getFullYear(), m: now.getMonth() + 1 }} maxMonth={{ y: now.getFullYear() + 2, m: 12 }} />
           <p className="small muted" style={{ margin: 0 }}>{picked.size ? `${picked.size} date${picked.size === 1 ? "" : "s"} picked: ${[...picked].sort().slice(0, 6).join(", ")}${picked.size > 6 ? "…" : ""}` : "Tap days to pick them. Small numbers show times already published."} {picked.size > 0 && <button className="link-btn" onClick={() => setPicked(new Set())}>Clear</button>}</p>
         </section>

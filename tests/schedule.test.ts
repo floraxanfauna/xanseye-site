@@ -102,15 +102,17 @@ describe("publishing a schedule", () => {
   });
 
   it("auto-fill only runs when switched on and the season is live", async () => {
+    const { listTypes } = await import("@/lib/sessiontypes");
     const season = await makeSeason();
+    const typeId = (await listTypes({ seasonId: season.id }))[0].id;
     expect(await autoFillSchedule()).toBeNull();
-    await saveSchedule({ ...base(), seasonId: season.id, autoFill: true });
+    await saveSchedule(typeId, { ...base(), autoFill: true });
     const out = await autoFillSchedule();
     expect(out).toBeTruthy();
     expect(await count(`select count(*)::int n from slots`)).toBeGreaterThan(0);
-    const pv = await previewSchedule();
+    const pv = await previewSchedule(typeId);
     expect(pv.days.some((d) => d.slots.some((s) => s.published))).toBe(true);
-    const again = await publishSchedule({}, { email: "x" });
+    const again = await publishSchedule(typeId, {}, { email: "x" });
     expect(again.created).toBe(0);
   });
 });

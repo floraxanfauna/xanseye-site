@@ -5,6 +5,7 @@ import { getActiveSeason, getSeasonBySlug } from "@/lib/seasons";
 import { AppError } from "@/lib/core";
 import { getSettings } from "@/lib/settings";
 import { currentOwner } from "@/lib/auth";
+import { getTypeBySlug } from "@/lib/sessiontypes";
 
 /** Public: only dates, times and counts. Never names or answers. */
 export const GET = handle(async (req: NextRequest) => {
@@ -12,7 +13,10 @@ export const GET = handle(async (req: NextRequest) => {
   const slug = req.nextUrl.searchParams.get("season");
   const season = slug ? await getSeasonBySlug(slug) : await getActiveSeason();
   if (!season || season.status !== "published") throw new AppError("not_found", "No open booking page right now.", 404);
-  const a = await getPublicAvailability(season.id);
+  const typeSlug = req.nextUrl.searchParams.get("type");
+  const type = typeSlug ? await getTypeBySlug(typeSlug) : null;
+  if (typeSlug && (!type || type.seasonId !== season.id || !type.active)) throw new AppError("not_found", "That session type isn't open for booking.", 404);
+  const a = await getPublicAvailability(season.id, type?.id ?? null);
   const s = await getSettings();
   return json({ ...a, timezone: s.timezone });
 });

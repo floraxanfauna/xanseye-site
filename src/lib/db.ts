@@ -22,7 +22,7 @@ export interface Db extends Q {
 const g = globalThis as unknown as { __xeDb?: Promise<Db> };
 
 export function getDb(): Promise<Db> {
-  if (!g.__xeDb) g.__xeDb = openDb().then(async (d) => (await migrate(d), d));
+  if (!g.__xeDb) g.__xeDb = openDb().then(async (d) => (await migrate(d), await backfill(d), d));
   return g.__xeDb;
 }
 
@@ -30,6 +30,7 @@ export function getDb(): Promise<Db> {
 export async function useFreshTestDb(): Promise<Db> {
   const d = await openPglite(undefined);
   await migrate(d);
+  await backfill(d);
   g.__xeDb = Promise.resolve(d);
   return d;
 }
@@ -77,6 +78,12 @@ async function openPglite(dir: string | undefined): Promise<Db> {
     exec: async (sql) => { await lite.exec(sql); },
     tx: (fn) => lite.transaction((t) => fn({ query: (s, p) => t.query(s, p as any[]) as any, exec: async (s) => { await t.exec(s); } })),
   };
+}
+
+/** Data fix-ups that need code (not just SQL). Idempotent; uses only the connection it is given. */
+async function backfill(db: Db) {
+  const { backfillSessionTypes } = await import("./sessiontypes");
+  await backfillSessionTypes(db);
 }
 
 async function migrate(db: Db) {

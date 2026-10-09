@@ -105,7 +105,7 @@ describe("client access", () => {
     const av = await getPublicAvailability(season.id);
     const dump = JSON.stringify(av);
     for (const needle of ["Zelda", "secret.example", "XE-", "Christmas", "landscape"]) expect(dump).not.toContain(needle);
-    expect(Object.keys(av).sort()).toEqual(["dates", "externalCheck", "paused", "seasonId", "slots"]);
+    expect(Object.keys(av).sort()).toEqual(["dates", "externalCheck", "paused", "seasonId", "slots", "typeId"]);
   });
 
   it("rate limiting trips after the allowed number of hits", async () => {

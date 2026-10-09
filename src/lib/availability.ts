@@ -5,12 +5,14 @@ import { planSlots, SlotPlanError, type PlannedSlot } from "./slots";
 import { localDate, localDayRange, isValidDate, zonedToUtc, NonexistentLocalTime, AmbiguousLocalTime } from "./time";
 import { getBusy, overlapsBusy } from "./google/busy";
 import { getSeason } from "./seasons";
+import { bookingRange, ensureDefaultType, getType, type SessionType } from "./sessiontypes";
 
 export interface PublicSlot { id: string; startsAt: string; endsAt: string; date: string }
 
 export interface PublicAvailability {
   paused: boolean;
   seasonId: string;
+  typeId: string | null;
   slots: PublicSlot[];
   /** date -> number of open times; only dates/counts/times, never client info. */
   dates: Record<string, number>;
@@ -22,19 +24,19 @@ export interface PublicAvailability {
  * What the public may book: explicitly published + future + inside booking rules + not held/booked
  * + not in conflict with owner-selected Google calendars. Free calendar time is never auto-published.
  */
-export async function getPublicAvailability(seasonId: string, now = new Date()): Promise<PublicAvailability> {
+export async function getPublicAvailability(seasonId: string, typeId: string | null = null, now = new Date()): Promise<PublicAvailability> {
   const db = await getDb();
   const settings = await getSettings();
-  if (settings.paused) return { paused: true, seasonId, slots: [], dates: {}, externalCheck: "ok" };
-  const from = new Date(now.getTime() + settings.minNoticeHours * 3600_000);
-  const to = new Date(now.getTime() + settings.horizonDays * 86400_000);
+  const type: SessionType | null = typeId ? await getType(typeId) : await getType(await ensureDefaultType(db, seasonId));
+  if (settings.paused || !type || !type.active || type.seasonId !== seasonId) return { paused: settings.paused, seasonId, typeId: type?.id ?? null, slots: [], dates: {}, externalCheck: "ok" };
+  const { from, to } = bookingRange(type, settings.horizonDays, settings.timezone, now);
   const r = await db.query(
     `select s.id, s.starts_at, s.ends_at from slots s
-      where s.season_id = $1 and s.state = 'open' and s.starts_at >= $2 and s.starts_at <= $3
+      where s.season_id = $1 and s.session_type_id = $4 and s.state = 'open' and s.starts_at >= $2 and s.starts_at <= $3
         and not exists (select 1 from bookings b where b.status in ('hold','confirmed')
                          and tstzrange(b.starts_at, b.buffer_end) && tstzrange(s.starts_at, s.buffer_end))
       order by s.starts_at`,
-    [seasonId, from, to],
+    [seasonId, from, to, type.id],
   );
 
   // max sessions per day (counts holds + confirmed across every season)
@@ -60,13 +62,14 @@ export async function getPublicAvailability(seasonId: string, now = new Date()):
     slots.push({ id: row.id, startsAt: row.starts_at.toISOString(), endsAt: row.ends_at.toISOString(), date });
     dates[date] = (dates[date] ?? 0) + 1;
   }
-  return { paused: false, seasonId, slots, dates, externalCheck };
+  return { paused: false, seasonId, typeId: type.id, slots, dates, externalCheck };
 }
 
 // ---------------- owner availability editor ----------------
 
 export interface PublishInput {
   seasonId: string;
+  typeId?: string | null;
   dates: string[];
   startTime: string; endTime: string;
   durationMin: number; bufferMin: number;
@@ -104,7 +107,7 @@ export async function publishSlots(i: PublishInput, actor: string): Promise<Publ
       throw e;
     }
   }
-  return publishPlanned(i.seasonId, days, actor);
+  return publishPlanned(i.seasonId, days, actor, { typeId: i.typeId ?? undefined });
 }
 
 export interface PublishResultX extends PublishResult { alreadyPublished: number; removed: number }
@@ -115,23 +118,24 @@ export interface PublishResultX extends PublishResult { alreadyPublished: number
  *  - overlaps with published times or live bookings are skipped and reported,
  *  - with replaceUnbooked, open times in the touched dates that nobody has ever booked are removed first.
  */
-export async function publishPlanned(seasonId: string, days: { date: string; slots: PlannedSlot[] }[], actor: string, o: { replaceUnbooked?: boolean; quiet?: boolean } = {}): Promise<PublishResultX> {
+export async function publishPlanned(seasonId: string, days: { date: string; slots: PlannedSlot[] }[], actor: string, o: { replaceUnbooked?: boolean; quiet?: boolean; typeId?: string } = {}): Promise<PublishResultX> {
   const db = await getDb();
   const settings = await getSettings();
   const season = await getSeason(seasonId);
   if (!season) throw new AppError("not_found", "Season not found", 404);
+  const typeId = o.typeId ?? (await ensureDefaultType(db, seasonId));
   const now = new Date();
   const result: PublishResultX = { created: 0, skippedConflicts: [], alreadyPublished: 0, removed: 0 };
 
   if (o.replaceUnbooked && days.length) {
     const lo = localDayRange(days[0].date, settings.timezone).start, hi = localDayRange(days[days.length - 1].date, settings.timezone).end;
     const r = await db.query(
-      `delete from slots where season_id=$1 and state='open' and starts_at >= $2 and starts_at < $3 and starts_at > now()
+      `delete from slots where season_id=$1 and session_type_id=$4 and state='open' and starts_at >= $2 and starts_at < $3 and starts_at > now()
          and not exists (select 1 from bookings b where b.slot_id = slots.id) returning id`,
-      [seasonId, lo, hi],
+      [seasonId, lo, hi, typeId],
     );
     result.removed = r.rows.length;
-    await db.query(`delete from slot_exceptions where season_id=$1 and starts_at >= $2 and starts_at < $3`, [seasonId, lo, hi]);
+    await db.query(`delete from slot_exceptions where session_type_id=$1 and starts_at >= $2 and starts_at < $3`, [typeId, lo, hi]);
   }
 
   for (const day of days) {
@@ -139,17 +143,17 @@ export async function publishPlanned(seasonId: string, days: { date: string; slo
       if (p.startsAt <= now) { if (!o.quiet) result.skippedConflicts.push({ startsAt: p.startsAt.toISOString(), reason: "already in the past" }); continue; }
       try {
         const made = await db.tx(async (q) => {
-          const same = await q.query(`select 1 from slots where starts_at=$1 and season_id=$2`, [p.startsAt, seasonId]);
+          const same = await q.query(`select 1 from slots where starts_at=$1 and season_id=$2 and session_type_id=$3`, [p.startsAt, seasonId, typeId]);
           if (same.rows.length) return false;
           // a time the owner deliberately moved or removed stays gone
-          const gone = await q.query(`select 1 from slot_exceptions where season_id=$1 and starts_at=$2`, [seasonId, p.startsAt]);
+          const gone = await q.query(`select 1 from slot_exceptions where session_type_id=$1 and starts_at=$2`, [typeId, p.startsAt]);
           if (gone.rows.length) return "skip" as const;
           const clash = await q.query(
             `select 1 from bookings where status in ('hold','confirmed') and tstzrange(starts_at, buffer_end) && tstzrange($1::timestamptz, $2::timestamptz)`,
             [p.startsAt, p.bufferEnd],
           );
           if (clash.rows.length) throw new AppError("overlap", "overlaps a booked session");
-          await q.query(`insert into slots(season_id, starts_at, ends_at, buffer_end) values ($1,$2,$3,$4)`, [seasonId, p.startsAt, p.endsAt, p.bufferEnd]);
+          await q.query(`insert into slots(season_id, session_type_id, starts_at, ends_at, buffer_end) values ($1,$2,$3,$4,$5)`, [seasonId, typeId, p.startsAt, p.endsAt, p.bufferEnd]);
           return true;
         });
         if (made === "skip") continue;
@@ -164,21 +168,22 @@ export async function publishPlanned(seasonId: string, days: { date: string; slo
   return result;
 }
 
-export interface OwnerSlot { id: string; seasonId: string; startsAt: string; endsAt: string; bufferEnd: string; state: string; date: string; booking: { id: string; ref: string; status: string } | null }
+export interface OwnerSlot { id: string; seasonId: string; typeId: string | null; typeName: string | null; typeColor: string | null; startsAt: string; endsAt: string; bufferEnd: string; state: string; date: string; booking: { id: string; ref: string; status: string } | null }
 
-export async function listOwnerSlots(seasonId: string | null, fromDate: string, toDate: string): Promise<OwnerSlot[]> {
+export async function listOwnerSlots(seasonId: string | null, fromDate: string, toDate: string, typeId: string | null = null): Promise<OwnerSlot[]> {
   const db = await getDb();
   const { timezone: tz } = await getSettings();
   const from = localDayRange(fromDate, tz).start, to = localDayRange(toDate, tz).end;
   const r = await db.query(
-    `select s.id, s.season_id, s.starts_at, s.ends_at, s.buffer_end, s.state, b.id as bid, b.ref, b.status as bstatus
+    `select s.id, s.season_id, s.session_type_id, t.name as tname, t.color as tcolor, s.starts_at, s.ends_at, s.buffer_end, s.state, b.id as bid, b.ref, b.status as bstatus
        from slots s left join bookings b on b.slot_id = s.id and b.status in ('hold','confirmed')
-      where s.starts_at >= $1 and s.starts_at < $2 and ($3::uuid is null or s.season_id = $3)
+       left join session_types t on t.id = s.session_type_id
+      where s.starts_at >= $1 and s.starts_at < $2 and ($3::uuid is null or s.season_id = $3) and ($4::uuid is null or s.session_type_id = $4)
       order by s.starts_at`,
-    [from, to, seasonId],
+    [from, to, seasonId, typeId],
   );
   return r.rows.map((x) => ({
-    id: x.id, seasonId: x.season_id, startsAt: x.starts_at.toISOString(), endsAt: x.ends_at.toISOString(), bufferEnd: x.buffer_end.toISOString(), state: x.state,
+    id: x.id, seasonId: x.season_id, typeId: x.session_type_id, typeName: x.tname, typeColor: x.tcolor, startsAt: x.starts_at.toISOString(), endsAt: x.ends_at.toISOString(), bufferEnd: x.buffer_end.toISOString(), state: x.state,
     date: localDate(x.starts_at, tz), booking: x.bid ? { id: x.bid, ref: x.ref, status: x.bstatus } : null,
   }));
 }
@@ -267,22 +272,23 @@ export async function updateSlot(id: string, e: SlotEdit, actor: string) {
       throw err;
     }
     if (new Date(cur.starts_at).getTime() !== t.start.getTime()) {
-      await q.query(`insert into slot_exceptions(season_id, starts_at) values ($1,$2) on conflict do nothing`, [cur.season_id, cur.starts_at]);
-      await q.query(`delete from slot_exceptions where season_id=$1 and starts_at=$2`, [cur.season_id, t.start]);
+      await q.query(`insert into slot_exceptions(session_type_id, starts_at) values ($1,$2) on conflict do nothing`, [cur.session_type_id, cur.starts_at]);
+      await q.query(`delete from slot_exceptions where session_type_id=$1 and starts_at=$2`, [cur.session_type_id, t.start]);
     }
     await audit(q, actor, "slot.update", null, { id });
   });
 }
 
 /** Add one extra time on a specific day. */
-export async function addSlot(seasonId: string, e: SlotEdit, actor: string) {
+export async function addSlot(seasonId: string, e: SlotEdit, actor: string, typeId?: string | null) {
   const settings = await getSettings();
+  const tid = typeId ?? (await ensureDefaultType(await getDb(), seasonId));
   if (!(await getSeason(seasonId))) throw new AppError("not_found", "Season not found", 404);
-  const t = resolveEdit(e, settings.timezone, settings.schedule.bufferMin);
+  const t = resolveEdit(e, settings.timezone, (await getType(tid))?.config.bufferMin ?? 15);
   if (t.start <= new Date()) throw new AppError("past", "That time is in the past.", 422);
-  await (await getDb()).query(`delete from slot_exceptions where season_id=$1 and starts_at=$2`, [seasonId, t.start]);
+  await (await getDb()).query(`delete from slot_exceptions where session_type_id=$1 and starts_at=$2`, [tid, t.start]);
   const slot: PlannedSlot = { startsAt: t.start, endsAt: t.end, bufferEnd: t.bufferEnd, localStart: t.start.toISOString(), localEnd: t.end.toISOString() };
-  const r = await publishPlanned(seasonId, [{ date: e.date, slots: [slot] }], actor);
+  const r = await publishPlanned(seasonId, [{ date: e.date, slots: [slot] }], actor, { typeId: tid });
   if (r.alreadyPublished) throw new AppError("exists", "There's already a time starting then.", 409);
   if (r.skippedConflicts.length) throw new AppError("overlap", "That overlaps another published time or a booked session.", 409);
 }
@@ -295,8 +301,8 @@ export async function removeSlot(id: string, actor: string): Promise<"deleted" |
     if (held) throw new AppError("booked", `This time is booked (${held.ref}). Cancel or reschedule that booking first.`, 409);
     const used = (await q.query(`select 1 from bookings where slot_id=$1 limit 1`, [id])).rows.length;
     if (used) { await q.query(`update slots set state='closed' where id=$1`, [id]); await audit(q, actor, "slot.hide", null, { id }); return "hidden" as const; }
-    const gone = (await q.query(`delete from slots where id=$1 returning season_id, starts_at`, [id])).rows[0];
-    if (gone) await q.query(`insert into slot_exceptions(season_id, starts_at) values ($1,$2) on conflict do nothing`, [gone.season_id, gone.starts_at]);
+    const gone = (await q.query(`delete from slots where id=$1 returning session_type_id, starts_at`, [id])).rows[0];
+    if (gone?.session_type_id) await q.query(`insert into slot_exceptions(session_type_id, starts_at) values ($1,$2) on conflict do nothing`, [gone.session_type_id, gone.starts_at]);
     await audit(q, actor, "slot.delete", null, { id });
     return "deleted" as const;
   });

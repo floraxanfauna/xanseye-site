@@ -31,11 +31,10 @@ function RangeEditor({ ranges, onChange, name }: { ranges: Range[]; onChange: (r
   );
 }
 
-export default function ScheduleView() {
+export default function ScheduleView({ typeId }: { typeId: string }) {
   const { show, node } = useToast();
   const [sch, setSch] = useState<Schedule | null>(null);
   const [saved, setSaved] = useState("");
-  const [seasons, setSeasons] = useState<any[]>([]);
   const [tz, setTz] = useState("America/Denver");
   const [pv, setPv] = useState<any>(null);
   const [pvErr, setPvErr] = useState<string | null>(null);
@@ -51,21 +50,19 @@ export default function ScheduleView() {
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   useEffect(() => {
-    Promise.all([api("GET", "schedule"), api("GET", "seasons"), api("GET", "settings")]).then(([s, ss, st]) => {
-      const list = ss.seasons.filter((x: any) => x.status !== "archived");
-      setSeasons(list); setTz(st.settings.timezone);
-      const sc: Schedule = s.schedule;
-      if (!sc.seasonId) sc.seasonId = (list.find((x: any) => x.status === "published") ?? list[0])?.id ?? null;
-      setSch(sc); setSaved(JSON.stringify(s.schedule));
+    setSch(null); setPv(null);
+    Promise.all([api("GET", `schedule?type=${typeId}`), api("GET", "settings")]).then(([s, st]) => {
+      setTz(st.settings.timezone);
+      setSch(s.schedule as Schedule); setSaved(JSON.stringify(s.schedule));
     }).catch((e) => show(e.message, "error"));
-  }, [show]);
+  }, [show, typeId]);
 
   const dirty = sch ? JSON.stringify(sch) !== saved : false;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refresh = useCallback((s: Schedule) => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
-      try { setPv(await api("POST", "schedule/preview", { schedule: s })); setPvErr(null); } catch (e: any) { setPvErr(e.message); }
+      try { setPv(await api("POST", "schedule/preview", { type: typeId, schedule: s })); setPvErr(null); } catch (e: any) { setPvErr(e.message); }
     }, 350);
   }, []);
   useEffect(() => { if (sch) refresh(sch); }, [sch, refresh]);
@@ -80,17 +77,17 @@ export default function ScheduleView() {
 
   async function save(): Promise<boolean> {
     if (!sch) return false;
-    try { await api("PUT", "schedule", { schedule: sch }); setSaved(JSON.stringify(sch)); show("Schedule saved."); return true; } catch (e: any) { show(e.message, "error"); return false; }
+    try { await api("PUT", "schedule", { type: typeId, schedule: sch }); setSaved(JSON.stringify(sch)); show("Schedule saved."); return true; } catch (e: any) { show(e.message, "error"); return false; }
   }
   async function publish() {
-    if (!sch?.seasonId) return show("Choose which season these times belong to.", "error");
+    if (!sch) return;
     if (dirty && !(await save())) return;
     if (replace && !confirm("Replace unbooked times in this range with the schedule above? Booked sessions are never touched.")) return;
     setBusy(true);
     try {
-      const r = await api("POST", "schedule/publish", { seasonId: sch.seasonId, replaceUnbooked: replace });
+      const r = await api("POST", "schedule/publish", { type: typeId, replaceUnbooked: replace });
       show(`Published ${r.created} new time${r.created === 1 ? "" : "s"}${r.removed ? `, replaced ${r.removed}` : ""}${r.alreadyPublished ? `. ${r.alreadyPublished} were already live` : ""}${r.skippedConflicts.length ? `. Skipped ${r.skippedConflicts.length} that overlapped a booking` : ""}.`);
-      setPv(await api("POST", "schedule/preview", { schedule: sch }));
+      setPv(await api("POST", "schedule/preview", { type: typeId, schedule: sch }));
     } catch (e: any) { show(e.message, "error"); } finally { setBusy(false); }
   }
   function saveOverride() {
@@ -144,15 +141,11 @@ export default function ScheduleView() {
           <div className="row">
             <div className="field" style={{ marginBottom: 0 }}><label className="label" htmlFor="buf">Break between sessions</label>
               <select id="buf" value={sch.bufferMin} onChange={(e) => set({ bufferMin: Number(e.target.value) })}>{[0, 5, 10, 15, 20, 30, 45, 60].map((m) => <option key={m} value={m}>{m === 0 ? "No break" : `${m} minutes`}</option>)}</select></div>
-            <div className="field" style={{ marginBottom: 0, flex: "1 1 220px" }}><label className="label" htmlFor="sn">These times belong to</label>
-              <select id="sn" value={sch.seasonId ?? ""} onChange={(e) => set({ seasonId: e.target.value || null })}><option value="">Choose a season…</option>{seasons.map((s) => <option key={s.id} value={s.id}>{s.name}{s.status === "draft" ? " (draft)" : ""}</option>)}</select></div>
-          </div>
-          <div className="row">
-            <div className="field" style={{ marginBottom: 0 }}><label className="label" htmlFor="wf">Starts on (optional)</label><input id="wf" type="date" value={sch.windowFrom ?? ""} onChange={(e) => set({ windowFrom: e.target.value || null })} /></div>
-            <div className="field" style={{ marginBottom: 0 }}><label className="label" htmlFor="wt">Ends on (optional)</label><input id="wt" type="date" value={sch.windowTo ?? ""} onChange={(e) => set({ windowTo: e.target.value || null })} /></div>
+            <div className="field" style={{ marginBottom: 0 }}><label className="label" htmlFor="ivl">Start times every</label>
+              <select id="ivl" value={sch.intervalMin ?? ""} onChange={(e) => set({ intervalMin: e.target.value === "" ? null : Number(e.target.value) })}><option value="">Right after the last one ({sch.durationMin + sch.bufferMin} min)</option>{[15, 20, 30, 45, 60, 90, 120].filter((m) => m >= sch.durationMin + sch.bufferMin).map((m) => <option key={m} value={m}>Every {m} minutes</option>)}</select></div>
           </div>
           <label className="choice"><input type="checkbox" checked={sch.autoFill} onChange={(e) => set({ autoFill: e.target.checked })} /><span>Keep adding new dates automatically as time goes on</span></label>
-          <p className="hint" style={{ margin: 0 }}>Leave the end date empty to keep going as far ahead as clients can book. With the box ticked, new weeks appear on their own; times you've closed stay closed.</p>
+          <p className="hint" style={{ margin: 0 }}>How far ahead clients can book is set under Session types → Booking rules. With the box ticked, new weeks appear on their own; times you've closed stay closed.</p>
         </section>
 
         <section className="card stack" aria-labelledby="ov-h">
@@ -190,7 +183,7 @@ export default function ScheduleView() {
           <p className="hint" style={{ margin: 0 }}>Use this after changing your hours so old, unbooked times disappear. Booked sessions are never touched.</p>
           <div className="row">
             <button className="btn btn-ghost" disabled={!dirty} onClick={save}>Save schedule</button>
-            <button className="btn btn-primary" disabled={busy || !sch.seasonId || (newCount === 0 && !replace)} onClick={publish}>{newCount ? `Publish ${newCount} new time${newCount === 1 ? "" : "s"}` : "Publish times"}</button>
+            <button className="btn btn-primary" disabled={busy || (newCount === 0 && !replace)} onClick={publish}>{newCount ? `Publish ${newCount} new time${newCount === 1 ? "" : "s"}` : "Publish times"}</button>
           </div>
           {dirty && <span className="badge badge-warn" style={{ justifySelf: "start" }}>Unsaved changes</span>}
         </section>

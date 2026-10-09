@@ -6,6 +6,7 @@ import type { PageContent } from "./content";
 import { IntakeSchema, contactSituation, diffIntake, firstNameOf, unansweredQuestions, type Intake, type FieldChange } from "./intake";
 import { getPaymentProvider, type PaymentEvent } from "./payments";
 import { checkSlotFree } from "./google/busy";
+import { bookingRange, ensureDefaultType, getType, type SessionType } from "./sessiontypes";
 import { localDate, localDayRange } from "./time";
 import { newRef, newSecret, sha256, logError } from "./util";
 
@@ -21,15 +22,19 @@ export interface Quote {
   isDemo: boolean;
   durationMin: number | null;
   location: string;
+  typeId?: string | null;
+  typeName?: string | null;
 }
 export interface Terms { text: string; refundTerms: string; rescheduleCutoffHours: number | null; acceptedAt: string; contentVersion: number }
 
 /** Snapshot of the prices/policies the client agreed to. Later page edits never rewrite this. */
-export function buildQuote(content: PageContent, version: number, s: AppSettings): Quote {
+export function buildQuote(content: PageContent, version: number, s: AppSettings, type?: SessionType | null): Quote {
+  const c = type?.config;
   return {
-    currency: s.currency, depositCents: s.depositCents, sessionPriceCents: content.facts.sessionPriceCents,
+    currency: s.currency, depositCents: c?.depositCents ?? s.depositCents, sessionPriceCents: c?.priceCents ?? content.facts.sessionPriceCents,
     beautyEditCents: s.beautyEditCents, depositPolicy: content.depositPolicy, contentVersion: version, isDemo: s.demoMode,
-    durationMin: content.facts.durationMin, location: content.facts.location,
+    durationMin: c?.durationMin ?? content.facts.durationMin, location: c?.location || content.facts.location,
+    typeId: type?.id ?? null, typeName: type?.name ?? null,
   };
 }
 
@@ -62,14 +67,16 @@ export async function reserveSlot(input: { slotId: string; intake: unknown; acce
   const intake = parsed.data;
   const missing = unansweredQuestions(intake);
   if (missing.length) throw new AppError("unanswered", `Please answer or choose N/A for: ${missing.join(", ")}`, 422, { missing });
-  if (intake.peopleCount.state === "answered" && intake.peopleCount.value > settings.maxPeople)
-    throw new AppError("too_many_people", `Mini sessions are for up to ${settings.maxPeople} people. Message me for larger groups.`, 422);
-
   const slot = (await db.query(`select s.*, se.status as season_status, se.published, se.published_version from slots s join seasons se on se.id = s.season_id where s.id = $1`, [input.slotId])).rows[0];
   if (!slot || slot.state !== "open" || slot.season_status !== "published") throw new AppError("slot_unavailable", "That time is no longer available. Please pick another.", 409);
   const now = new Date();
-  if (slot.starts_at < new Date(now.getTime() + settings.minNoticeHours * 3600_000) || slot.starts_at > new Date(now.getTime() + settings.horizonDays * 86400_000))
+  const type = (await getType(slot.session_type_id ?? (await ensureDefaultType(db, slot.season_id))))!;
+  if (!type.active) throw new AppError("slot_unavailable", "That session type isn't open for booking right now.", 409);
+  const range = bookingRange(type, settings.horizonDays, settings.timezone, now);
+  if (slot.starts_at < range.from || slot.starts_at > range.to)
     throw new AppError("slot_unavailable", "That time is outside the booking window.", 409);
+  if (intake.peopleCount.state === "answered" && intake.peopleCount.value > type.config.maxPeople)
+    throw new AppError("too_many_people", `This session is for up to ${type.config.maxPeople} people. Message me for larger groups.`, 422);
 
   // Google conflict check immediately before taking a hold. If it can't be verified, don't take payment.
   const ext = await checkSlotFree(slot.starts_at, slot.ends_at);
@@ -77,7 +84,7 @@ export async function reserveSlot(input: { slotId: string; intake: unknown; acce
   if (ext === "error") throw new AppError("conflict_check_failed", "I couldn't double-check the calendar just now. Please try again in a minute.", 503);
 
   const content = slot.published as PageContent;
-  const quote = buildQuote(content, slot.published_version, settings);
+  const quote = buildQuote(content, slot.published_version, settings, type);
   const terms: Terms = {
     text: content.termsText, refundTerms: content.refundTerms, rescheduleCutoffHours: content.rescheduleCutoffHours,
     acceptedAt: now.toISOString(), contentVersion: slot.published_version,
@@ -100,10 +107,10 @@ export async function reserveSlot(input: { slotId: string; intake: unknown; acce
         const ref = newRef();
         const r = await q.query(
           `insert into bookings(ref, slot_id, season_id, status, starts_at, ends_at, buffer_end, hold_expires_at, quote, terms, claim_hash,
-                                recovery_email, recovery_email_verified, contact_missing, intake_version)
-           values ($1,$2,$3,'hold',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,1) returning id, ref`,
+                                recovery_email, recovery_email_verified, contact_missing, intake_version, session_type_id)
+           values ($1,$2,$3,'hold',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,1,$14) returning id, ref`,
           [ref, slot.id, slot.season_id, slot.starts_at, slot.ends_at, slot.buffer_end, holdExpires, JSON.stringify(quote), JSON.stringify(terms),
-           sha256(claimSecret), email, !!email, contactSituation(intake) !== "email"],
+           sha256(claimSecret), email, !!email, contactSituation(intake) !== "email", type.id],
         );
         await q.query(`insert into intake_revisions(booking_id, version, data, changes, source) values ($1,1,$2,'[]','client')`, [r.rows[0].id, JSON.stringify(intake)]);
         return r.rows[0] as { id: string; ref: string };
@@ -118,8 +125,8 @@ export async function reserveSlot(input: { slotId: string; intake: unknown; acce
 
   // ---- payment (hosted Checkout). The same idempotency key is used on retry.
   const req = {
-    bookingId: booking.id, ref: booking.ref, amountCents: settings.depositCents, currency: settings.currency, expiresAt: stripeExpires,
-    description: `Mini session deposit (${booking.ref})`, customerEmail: email ?? undefined, idempotencyKey: `booking-${booking.id}`,
+    bookingId: booking.id, ref: booking.ref, amountCents: quote.depositCents, currency: settings.currency, expiresAt: stripeExpires,
+    description: `${type.name} deposit (${booking.ref})`, customerEmail: email ?? undefined, idempotencyKey: `booking-${booking.id}`,
   };
   let checkout;
   try {
@@ -225,7 +232,8 @@ async function onConfirmed(q: Q, bookingId: string) {
   await enqueue(q, { kind: "calendar.upsert", bookingId, dedupeKey: `cal:${bookingId}:i${b.intake_version}` });
   await enqueue(q, { kind: "doc.upsert", bookingId, dedupeKey: `doc:${bookingId}:i${b.intake_version}` });
   await enqueue(q, { kind: "email.owner_new_booking", bookingId, dedupeKey: `owner-new:${bookingId}` });
-  if (situation === "email") await enqueue(q, { kind: "email.client_confirmation", bookingId, dedupeKey: `client-conf:${bookingId}` });
+  const btype = b.session_type_id ? await getType(b.session_type_id, q) : null;
+  if (situation === "email" && (btype?.config.sendConfirmationEmail ?? true)) await enqueue(q, { kind: "email.client_confirmation", bookingId, dedupeKey: `client-conf:${bookingId}` });
   await scheduleReminders(q, b, situation === "email", settings);
 
   if (situation === "phone_only")
@@ -237,11 +245,13 @@ async function onConfirmed(q: Q, bookingId: string) {
 
 async function scheduleReminders(q: Q, b: any, hasEmail: boolean, settings: AppSettings) {
   if (!hasEmail) return;
+  const type = b.session_type_id ? await getType(b.session_type_id, q) : null;
+  const reminders = type ? type.config.reminders : settings.reminderHours.map((h) => ({ hoursBefore: h, subject: "", body: "" }));
   const now = Date.now();
-  for (const h of settings.reminderHours) {
-    const runAt = new Date(new Date(b.starts_at).getTime() - h * 3600_000);
+  for (const r of reminders) {
+    const runAt = new Date(new Date(b.starts_at).getTime() - r.hoursBefore * 3600_000);
     if (runAt.getTime() <= now) continue; // never send a reminder for a threshold already past
-    await enqueue(q, { kind: "email.client_reminder", bookingId: b.id, dedupeKey: `reminder:${b.id}:${h}:${new Date(b.starts_at).getTime()}`, payload: { hours: h }, runAt });
+    await enqueue(q, { kind: "email.client_reminder", bookingId: b.id, dedupeKey: `reminder:${b.id}:${r.hoursBefore}:${new Date(b.starts_at).getTime()}`, payload: { hours: r.hoursBefore, subject: r.subject, body: r.body }, runAt });
   }
 }
 
@@ -292,12 +302,13 @@ export async function saveIntake(bookingId: string, raw: unknown, expectedVersio
   const parsed = IntakeSchema.safeParse(raw);
   if (!parsed.success) throw new AppError("invalid", "Some answers need another look.", 422, { issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })) });
   const next = parsed.data;
-  if (next.peopleCount.state === "answered" && next.peopleCount.value > settings.maxPeople)
-    throw new AppError("too_many_people", `Mini sessions are for up to ${settings.maxPeople} people.`, 422);
-
   return db.tx(async (q) => {
     const b = (await q.query(`select * from bookings where id=$1 for update`, [bookingId])).rows[0];
     if (!b) throw new AppError("not_found", "Booking not found", 404);
+    const btype = b.session_type_id ? await getType(b.session_type_id, q) : null;
+    const maxPeople = btype?.config.maxPeople ?? settings.maxPeople;
+    if (next.peopleCount.state === "answered" && next.peopleCount.value > maxPeople)
+      throw new AppError("too_many_people", `This session is for up to ${maxPeople} people.`, 422);
     if (b.status !== "confirmed" && b.status !== "review") throw new AppError("not_confirmed", "This booking isn't confirmed yet.", 409);
     if (b.intake_version !== expectedVersion) throw new VersionConflict(b.intake_version);
 
@@ -390,7 +401,7 @@ export interface BookingView {
   id: string; ref: string; status: string; paymentStatus: string; startsAt: Date; endsAt: Date; paidCents: number; quote: Quote; terms: Terms;
   intakeVersion: number; intake: Intake; seasonId: string; workflowState: string; checklist: Record<string, boolean>;
   galleryUrl: string | null; galleryDue: string | null; ownerNotes: string; docUrl: string | null; calendarEventId: string | null;
-  docVersion: number; recoveryEmail: string | null; contactMissing: boolean; createdAt: Date; slotId: string;
+  docVersion: number; recoveryEmail: string | null; contactMissing: boolean; createdAt: Date; slotId: string; typeId: string | null;
 }
 
 export async function getBookingView(bookingId: string, q?: Q): Promise<BookingView | null> {
@@ -403,8 +414,48 @@ export async function getBookingView(bookingId: string, q?: Q): Promise<BookingV
     quote: b.quote, terms: b.terms, intakeVersion: b.intake_version, intake: rev.data, seasonId: b.season_id, workflowState: b.workflow_state,
     checklist: b.checklist, galleryUrl: b.gallery_url, galleryDue: b.gallery_due ? String(b.gallery_due).slice(0, 10) : null, ownerNotes: b.owner_notes,
     docUrl: b.doc_url, calendarEventId: b.calendar_event_id, docVersion: b.doc_version, recoveryEmail: b.recovery_email,
-    contactMissing: b.contact_missing, createdAt: b.created_at, slotId: b.slot_id,
+    contactMissing: b.contact_missing, createdAt: b.created_at, slotId: b.slot_id, typeId: b.session_type_id ?? null,
   };
 }
 
 export { firstNameOf, getSeason };
+
+// ---------------------------------------------------------------- client self-service (within the owner's rules)
+
+export interface ClientChangeRules { canReschedule: boolean; canCancel: boolean; cutoffHours: number; reason: string | null }
+
+/** What a client may do to their own booking, per the session type's toggles and notice period. */
+export async function clientChangeRules(bookingId: string, now = new Date()): Promise<ClientChangeRules> {
+  const v = await getBookingView(bookingId);
+  if (!v) throw new AppError("not_found", "Booking not found", 404);
+  const t = v.typeId ? await getType(v.typeId) : null;
+  const cutoff = t?.config.clientChangeCutoffHours ?? 48;
+  const none = (reason: string) => ({ canReschedule: false, canCancel: false, cutoffHours: cutoff, reason });
+  if (v.status !== "confirmed") return none("This booking isn't active.");
+  if (!t || (!t.config.allowClientReschedule && !t.config.allowClientCancel)) return none("Changes are handled by me directly.");
+  const hoursLeft = (new Date(v.startsAt).getTime() - now.getTime()) / 3600_000;
+  if (hoursLeft < cutoff) return none(`It's within ${cutoff} hours of your session, so changes now go through me directly.`);
+  return { canReschedule: t.config.allowClientReschedule, canCancel: t.config.allowClientCancel, cutoffHours: cutoff, reason: null };
+}
+
+/** Client picks another open time of the SAME session type. Price snapshot and history stay; calendar, Doc and reminders follow. */
+export async function clientReschedule(bookingId: string, newSlotId: string): Promise<void> {
+  const rules = await clientChangeRules(bookingId);
+  if (!rules.canReschedule) throw new AppError("not_allowed", rules.reason ?? "Rescheduling isn't available for this session.", 403);
+  const v = (await getBookingView(bookingId))!;
+  const { getPublicAvailability } = await import("./availability");
+  const av = await getPublicAvailability(v.seasonId, v.typeId);
+  if (!av.slots.some((s) => s.id === newSlotId && s.id !== v.slotId)) throw new AppError("slot_unavailable", "That time isn't available. Please pick another.", 409);
+  await rescheduleBooking(bookingId, newSlotId, "client");
+  const db = await getDb();
+  await enqueue(db, { kind: "email.owner_alert", bookingId, dedupeKey: `alert:client-moved:${bookingId}:${Date.now()}`, payload: { subject: `${v.ref} moved their session`, message: "A client moved their own session to a new time (allowed by your session settings). Their calendar event, Google Doc and reminders were updated." } });
+}
+
+export async function clientCancel(bookingId: string, reason = ""): Promise<void> {
+  const rules = await clientChangeRules(bookingId);
+  if (!rules.canCancel) throw new AppError("not_allowed", rules.reason ?? "Canceling isn't available for this session.", 403);
+  const v = (await getBookingView(bookingId))!;
+  await cancelBooking(bookingId, "client", reason);
+  const db = await getDb();
+  await enqueue(db, { kind: "email.owner_alert", bookingId, dedupeKey: `alert:client-canceled:${bookingId}`, payload: { subject: `${v.ref} canceled their session`, message: `A client canceled their own session${reason ? `: "${reason.slice(0, 300)}"` : ""}. The time is open again. Decide on their deposit per your refund terms (see Needs attention).` } });
+}

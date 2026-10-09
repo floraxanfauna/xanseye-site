@@ -9,3 +9,14 @@ Anything "waiting for setup" runs by itself once Google/email is connected. Clie
 
 - **Availability → Edit individual times**: pick a date, then change any single time's start, length or break; add an extra time; hide or remove one. Booked times can't be edited here (open the session to reschedule). Changes you make are remembered, so your weekly schedule won't bring a moved or removed time back.
 - **Every booking emails you** (from your connected Gmail once you allow it in Settings).
+
+## Session types (new)
+**Session types** is where you set up each thing clients can book, like HoneyBook's session types. Each one has its own:
+- name, color, length, price, deposit, most people, location and booking instructions
+- weekly hours and date overrides (click **Set hours**, or use the selector at the top of Availability)
+- booking rules: break after each session, how often start times appear, minimum notice, and how far ahead people can book (always, a rolling window, or between two dates)
+- confirmation message, whether to email a confirmation, and whether clients may **reschedule or cancel themselves** (until a cutoff you choose; cancellations flag the deposit decision for you)
+- up to two reminder emails, in your own words if you like
+- its own **shareable link** (Copy button on each card). Share `…/mini-sessions` to let people choose, or a type's own link to go straight to it.
+
+You are still one photographer: two session types can never be booked at the same time. Times from different types can't overlap.

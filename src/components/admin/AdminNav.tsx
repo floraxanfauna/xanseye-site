@@ -7,6 +7,7 @@ import { api } from "./api";
 const TABS = [
   { href: "/admin", label: "Today" },
   { href: "/admin/availability", label: "Availability" },
+  { href: "/admin/session-types", label: "Session types" },
   { href: "/admin/sessions", label: "Sessions" },
   { href: "/admin/page-editor", label: "Page editor" },
   { href: "/admin/messages", label: "Messages" },

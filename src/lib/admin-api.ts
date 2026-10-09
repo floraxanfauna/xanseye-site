@@ -5,6 +5,8 @@ import { getSettings, saveSettings, type AppSettings } from "./settings";
 import { archiveSeason, createSeason, duplicateSeason, getSeason, listSeasons, listVersions, publishSeason, restoreVersion, saveDraft, unpublishSeason } from "./seasons";
 import { closeSlots, listOwnerSlots, previewPlan, publishSlots, reopenSlots, publishPlanned, updateSlot, addSlot, removeSlot } from "./availability";
 import { planSchedule, validateSchedule, type Schedule } from "./schedule";
+import { createType, duplicateType, ensureDefaultType, getType, listTypes, removeType, typeToSchedule, updateType, type SessionType, type TypeUpdate } from "./sessiontypes";
+import { appUrl } from "./util";
 import { addDays } from "./time";
 import { cancelBooking, getBookingView, rescheduleBooking, balanceSummary } from "./booking";
 import { retryJob } from "./outbox";
@@ -40,6 +42,18 @@ const SettingsPatch = z.object({
 
 // ---------------------------------------------------------------- reads
 
+/** A season's price/length/location gaps are covered when every active session type supplies its own. */
+export async function gapsWithTypes(season: { id: string; draft: any; published: any }, content = season.draft) {
+  const gaps = launchGaps(content);
+  const types = await listTypes({ seasonId: season.id, activeOnly: true });
+  if (!types.length) return gaps;
+  const covered = new Set<string>();
+  if (types.every((t) => t.config.priceCents != null)) covered.add("facts.sessionPriceCents");
+  covered.add("facts.durationMin");
+  if (types.every((t) => t.config.location || content.facts.location)) covered.add("facts.location");
+  return gaps.filter((g) => !covered.has(g.field));
+}
+
 export async function overview() {
   const db = await getDb();
   const s = await getSettings();
@@ -57,7 +71,7 @@ export async function overview() {
   const toDeliver = (await db.query(`select count(*)::int n from bookings where status='confirmed' and starts_at < now() and workflow_state not in ('gallery_sent','completed')`)).rows[0].n;
   const mirrorLag = (await db.query(`select count(*)::int n from bookings where status='confirmed' and doc_version < intake_version`)).rows[0].n;
   const season = (await listSeasons()).find((x) => x.status === "published") ?? null;
-  const gaps = season ? launchGaps(season.draft) : [];
+  const gaps = season ? await gapsWithTypes(season) : [];
   const google = await getGoogleIntegration();
 
   return {
@@ -192,7 +206,7 @@ export async function updateSettings(patch: unknown) {
     // Going live: the published season must have real values and Stripe must be configured.
     const season = (await listSeasons()).find((x) => x.status === "published");
     if (!season) throw new AppError("not_ready", "Publish a season first.", 422);
-    const gaps = launchGaps(season.published ?? season.draft);
+    const gaps = await gapsWithTypes(season, season.published ?? season.draft);
     if (gaps.length) throw new AppError("launch_gaps", `Before going live, fill in: ${gaps.map((g) => g.label).join(", ")}`, 422, { gaps });
     if (!stripeConfigured()) throw new AppError("not_ready", "Connect Stripe first (add STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET), or deposits can't be collected.", 422);
   }
@@ -244,18 +258,50 @@ export async function exportAll() {
   };
 }
 
-// ---------------------------------------------------------------- weekly schedule (Calendly-style)
+// ---------------------------------------------------------------- session types + weekly schedule (per type)
 
-export async function getSchedule() { return (await getSettings()).schedule; }
+async function mustType(id: string): Promise<SessionType> {
+  const t = await getType(id);
+  if (!t) throw new AppError("not_found", "Session type not found", 404);
+  return t;
+}
 
-export async function saveSchedule(raw: unknown): Promise<Schedule> {
+export async function typesOverview(seasonId?: string | null) {
+  const db = await getDb();
+  const types = await listTypes({ seasonId: seasonId ?? undefined });
+  const out = [];
+  for (const t of types) {
+    const c = (await db.query(
+      `select (select count(*) from slots where session_type_id=$1 and state='open' and starts_at > now())::int as open_times,
+              (select count(*) from bookings where session_type_id=$1 and status='confirmed' and starts_at > now())::int as upcoming`, [t.id])).rows[0];
+    out.push({ ...t, link: `${appUrl()}/mini-sessions?type=${t.slug}`, openTimes: c.open_times, upcoming: c.upcoming });
+  }
+  return out;
+}
+
+export async function getTypeAdmin(id: string) { const t = await mustType(id); return { ...t, link: `${appUrl()}/mini-sessions?type=${t.slug}` }; }
+
+export async function createTypeAdmin(body: { seasonId: string; name: string; duplicateFrom?: string }, actor: Actor) {
+  const t = body.duplicateFrom ? await duplicateType(body.duplicateFrom, body.name, actor.email) : await createType(body.seasonId, body.name);
+  await audit(await getDb(), actor.email, "sessiontype.create", null, { id: t.id });
+  return t;
+}
+export const updateTypeAdmin = (id: string, patch: TypeUpdate, actor: Actor) => updateType(id, patch, actor.email);
+export const removeTypeAdmin = (id: string, actor: Actor) => removeType(id, actor.email);
+
+export async function getSchedule(typeId: string) {
+  const s = await getSettings();
+  return typeToSchedule(await mustType(typeId), new Date(), s.timezone);
+}
+
+/** The schedule screen edits hours, length, break, spacing and auto-fill; booking window lives in the session type's rules. */
+export async function saveSchedule(typeId: string, raw: unknown): Promise<Schedule> {
   let sch: Schedule;
   try { sch = validateSchedule(raw); } catch (e: any) {
     throw new AppError("invalid", e?.issues ? e.issues.map((i: any) => `${i.path.join(".")}: ${i.message}`).join("; ") : e.message, 422);
   }
-  if (sch.seasonId && !(await getSeason(sch.seasonId))) throw new AppError("invalid", "Choose a season for these times.", 422);
-  await saveSettings({ schedule: sch });
-  return sch;
+  const t = await updateType(typeId, { config: { weekly: sch.weekly, overrides: sch.overrides, durationMin: sch.durationMin, bufferMin: sch.bufferMin, intervalMin: sch.intervalMin, autoFill: sch.autoFill } }, "owner");
+  return typeToSchedule(t, new Date(), (await getSettings()).timezone);
 }
 
 function windowFor(s: AppSettings, sch: Schedule, now = new Date()) {
@@ -266,19 +312,17 @@ function windowFor(s: AppSettings, sch: Schedule, now = new Date()) {
   return { from, to };
 }
 
-/** What the weekly schedule would produce, with how many of those times are already published. */
-export async function previewSchedule(raw?: unknown) {
+/** What a type's weekly schedule would produce, with how many of those times are already published. */
+export async function previewSchedule(typeId: string, raw?: unknown) {
   const s = await getSettings();
-  const sch = raw ? validateSchedule(raw) : s.schedule;
-  const { from, to } = windowFor(s, sch);
-  const days = planSchedule(sch, s.timezone, from, to);
+  const t = await mustType(typeId);
+  const sch = raw ? { ...typeToSchedule(t, new Date(), s.timezone), ...validateSchedule(raw) } : typeToSchedule(t, new Date(), s.timezone);
+  const win = windowFor(s, typeToSchedule(t, new Date(), s.timezone));
+  const days = planSchedule(sch, s.timezone, win.from, win.to);
   const db = await getDb();
-  const existing = sch.seasonId
-    ? (await db.query(`select starts_at from slots where season_id=$1 and state='open' and starts_at > now()`, [sch.seasonId])).rows.map((r) => r.starts_at.getTime())
-    : [];
-  const have = new Set(existing);
+  const have = new Set((await db.query(`select starts_at from slots where session_type_id=$1 and state='open' and starts_at > now()`, [typeId])).rows.map((r) => r.starts_at.getTime()));
   return {
-    from, to, timezone: s.timezone,
+    from: win.from, to: win.to, timezone: s.timezone,
     days: days.map((d) => ({
       date: d.date, source: d.source, error: d.error,
       slots: d.slots.map((x) => ({ startsAt: x.startsAt.toISOString(), endsAt: x.endsAt.toISOString(), published: have.has(x.startsAt.getTime()) })),
@@ -286,29 +330,33 @@ export async function previewSchedule(raw?: unknown) {
   };
 }
 
-export async function publishSchedule(body: { seasonId?: string; replaceUnbooked?: boolean }, actor: Actor) {
+export async function publishSchedule(typeId: string, body: { replaceUnbooked?: boolean }, actor: Actor) {
   const s = await getSettings();
-  const sch = s.schedule;
-  const seasonId = body.seasonId ?? sch.seasonId;
-  if (!seasonId) throw new AppError("invalid", "Choose which season these times belong to.", 422);
+  const t = await mustType(typeId);
+  const sch = typeToSchedule(t, new Date(), s.timezone);
   const { from, to } = windowFor(s, sch);
   const days = planSchedule(sch, s.timezone, from, to);
   const bad = days.find((d) => d.error);
   if (bad) throw new AppError("invalid", `${bad.date}: ${bad.error}`, 422);
-  const r = await publishPlanned(seasonId, days, actor.email, { replaceUnbooked: !!body.replaceUnbooked });
-  if (sch.seasonId !== seasonId) await saveSettings({ schedule: { ...sch, seasonId } });
-  return r;
+  return publishPlanned(t.seasonId, days, actor.email, { replaceUnbooked: !!body.replaceUnbooked, typeId });
 }
 
-/** Called by the worker once a day: keeps newly-arriving dates filled for owners who switched on auto-fill. */
+/** Called by the worker once a day: keeps newly-arriving dates filled for every type that has auto-fill on. */
 export async function autoFillSchedule() {
   const s = await getSettings();
-  const sch = s.schedule;
-  if (!sch.autoFill || !sch.seasonId) return null;
-  const season = await getSeason(sch.seasonId);
-  if (!season || season.status !== "published") return null;
-  const { from, to } = windowFor(s, sch);
-  return publishPlanned(sch.seasonId, planSchedule(sch, s.timezone, from, to).filter((d) => !d.error), "auto-fill", { quiet: true });
+  const db = await getDb();
+  let any = false;
+  for (const t of await listTypes({ activeOnly: true })) {
+    if (!t.config.autoFill) continue;
+    const season = await getSeason(t.seasonId);
+    if (!season || season.status !== "published") continue;
+    const sch = typeToSchedule(t, new Date(), s.timezone);
+    const { from, to } = windowFor(s, sch);
+    await publishPlanned(t.seasonId, planSchedule(sch, s.timezone, from, to).filter((d) => !d.error), "auto-fill", { quiet: true, typeId: t.id });
+    any = true;
+  }
+  void db;
+  return any ? true : null;
 }
 
 export { addDays };

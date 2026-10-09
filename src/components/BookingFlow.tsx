@@ -9,7 +9,10 @@ import { dollars } from "@/lib/format";
 interface Slot { id: string; startsAt: string; endsAt: string; date: string }
 interface Availability { paused: boolean; slots: Slot[]; dates: Record<string, number>; externalCheck: string; timezone: string }
 
+export interface PublicType { slug: string; name: string; durationMin: number; priceCents: number | null; depositCents: number | null; location: string; instructions: string; maxPeople: number; color: string }
+
 export interface BookingConfig {
+  types: PublicType[]; initialTypeSlug: string | null;
   seasonSlug: string; timezone: string; today: string; depositCents: number; beautyEditCents: number; maxPeople: number; demo: boolean;
   sessionPriceCents: number | null; depositPolicy: "credit" | "refundable" | "nonrefundable" | null; durationMin: number | null; location: string;
   termsText: string; refundTerms: string; holdMinutes: number; beautyCopy: string; buttonText: string; preview: boolean;
@@ -18,6 +21,9 @@ export interface BookingConfig {
 const STEPS = ["Date & time", "Your details", "Review & reserve"];
 
 export default function BookingFlow({ cfg }: { cfg: BookingConfig }) {
+  const [typeSlug, setTypeSlug] = useState<string | null>(cfg.initialTypeSlug);
+  const type = cfg.types.find((t) => t.slug === typeSlug) ?? null;
+  const eff = { price: type?.priceCents ?? cfg.sessionPriceCents, deposit: type?.depositCents ?? cfg.depositCents, duration: type?.durationMin ?? cfg.durationMin, location: type?.location || cfg.location, maxPeople: type?.maxPeople ?? cfg.maxPeople };
   const [av, setAv] = useState<Availability | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [step, setStep] = useState(1);
@@ -37,7 +43,7 @@ export default function BookingFlow({ cfg }: { cfg: BookingConfig }) {
   const load = useCallback(async () => {
     setLoadErr(null);
     try {
-      const r = await fetch(`/api/public/availability?season=${encodeURIComponent(cfg.seasonSlug)}`, { cache: "no-store" });
+      const r = await fetch(`/api/public/availability?season=${encodeURIComponent(cfg.seasonSlug)}${typeSlug ? `&type=${encodeURIComponent(typeSlug)}` : ""}`, { cache: "no-store" });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Couldn't load times");
       const j: Availability = await r.json();
       setAv(j);
@@ -46,8 +52,13 @@ export default function BookingFlow({ cfg }: { cfg: BookingConfig }) {
     } catch (e) {
       setLoadErr(e instanceof Error ? e.message : "Couldn't load times");
     }
-  }, [cfg.seasonSlug, ty, tm]);
-  useEffect(() => { load(); }, [load]);
+  }, [cfg.seasonSlug, typeSlug, ty, tm]);
+  useEffect(() => { if (typeSlug || cfg.types.length <= 1) load(); }, [load, typeSlug, cfg.types.length]);
+
+  function chooseType(slug: string | null) {
+    setTypeSlug(slug); setDate(null); setSlotId(null); setAv(null); setStep(1); setProblem(null);
+    try { const u = new URL(window.location.href); slug ? u.searchParams.set("type", slug) : u.searchParams.delete("type"); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ }
+  }
 
   const slot = useMemo(() => av?.slots.find((s) => s.id === slotId) ?? null, [av, slotId]);
   const daySlots = useMemo(() => (av && date ? av.slots.filter((s) => s.date === date) : []), [av, date]);
@@ -100,10 +111,10 @@ export default function BookingFlow({ cfg }: { cfg: BookingConfig }) {
     }
   }
 
-  const price = cfg.sessionPriceCents;
+  const price = eff.price;
   const credited = cfg.depositPolicy === "credit";
   const beautyYes = intake.beautyEdit.state === "answered" && intake.beautyEdit.value === "yes";
-  const balance = price == null ? null : Math.max(0, price - (credited ? cfg.depositCents : 0)) + (beautyYes ? cfg.beautyEditCents : 0);
+  const balance = price == null ? null : Math.max(0, price - (credited ? eff.deposit : 0)) + (beautyYes ? cfg.beautyEditCents : 0);
 
   return (
     <section id="book" className="booking" aria-labelledby="book-h" ref={top}>
@@ -112,6 +123,24 @@ export default function BookingFlow({ cfg }: { cfg: BookingConfig }) {
         {cfg.demo && <div className="banner banner-demo" style={{ marginBottom: 16 }}><strong>Demo mode.</strong> This page works end to end, but no real money moves and demo values are placeholders.</div>}
         {cfg.preview && <div className="banner banner-info" style={{ marginBottom: 16 }}><strong>Preview.</strong> You're seeing your draft. Booking is switched off here.</div>}
 
+        {cfg.types.length > 1 && !typeSlug ? (
+          <div>
+            <h3 style={{ marginTop: 0 }}>What would you like to book?</h3>
+            <p className="muted">Choose a session. Each one has its own length, price and open times.</p>
+            <div className="type-grid">
+              {cfg.types.map((t) => (
+                <button key={t.slug} type="button" className="type-card" style={{ borderTopColor: t.color }} onClick={() => chooseType(t.slug)}>
+                  <strong className="type-name">{t.name}</strong>
+                  <span className="muted small">{t.durationMin} minutes{t.priceCents != null ? ` · ${dollars(t.priceCents)}` : ""}{t.location ? ` · ${t.location}` : ""}</span>
+                  {t.instructions && <span className="small type-note">{t.instructions}</span>}
+                  <span className="type-go">See open times →</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (<>
+        {cfg.types.length > 1 && type && <p className="small" style={{ margin: "0 0 12px" }}>Booking: <strong>{type.name}</strong> · <button type="button" className="link-btn small" onClick={() => chooseType(null)}>Choose a different session</button></p>}
+        {type?.instructions && <div className="banner banner-info" style={{ marginBottom: 14 }}><strong>Good to know:</strong> {type.instructions}</div>}
         <ol className="steps" aria-label="Booking steps" style={{ listStyle: "none", padding: 0 }}>
           {STEPS.map((s, i) => (
             <li key={s} style={{ display: "contents" }}>
@@ -198,7 +227,7 @@ export default function BookingFlow({ cfg }: { cfg: BookingConfig }) {
             <h3>Your session details</h3>
             <p className="muted">Every question has an N/A option, so skip anything you'd rather not share. You can update your answers any time after booking.</p>
             <IntakeForm value={intake} onChange={(i) => { setIntake(i); if (Object.keys(errors).length) setErrors(fieldErrors(i)); }} errors={errors}
-              maxPeople={cfg.maxPeople} beautyPrice={dollars(cfg.beautyEditCents)} beautyCopy={cfg.beautyCopy} />
+              maxPeople={eff.maxPeople} beautyPrice={dollars(cfg.beautyEditCents)} beautyCopy={cfg.beautyCopy} />
             <div className="row between" style={{ marginTop: 10 }}>
               <button className="btn btn-ghost" type="button" onClick={() => go(1)}>← Back</button>
               <button className="btn btn-primary" type="button" onClick={toReview}>Review &amp; reserve →</button>
@@ -213,8 +242,9 @@ export default function BookingFlow({ cfg }: { cfg: BookingConfig }) {
               <h3>Review your session</h3>
               <ul className="list">
                 <li><strong>When</strong><br />{when}</li>
-                {cfg.location && <li><strong>Where</strong><br />{cfg.location}</li>}
-                {cfg.durationMin && <li><strong>Length</strong><br />{cfg.durationMin} minutes</li>}
+                {type && <li><strong>Session</strong><br />{type.name}</li>}
+                {eff.location && <li><strong>Where</strong><br />{eff.location}</li>}
+                {eff.duration && <li><strong>Length</strong><br />{eff.duration} minutes</li>}
                 <li><strong>Your answers</strong>
                   <table className="t" style={{ marginTop: 6 }}><tbody>
                     {(Object.keys(FIELD_LABELS) as FieldKey[]).filter((k) => k !== "photoRelease").map((k) => (
@@ -230,7 +260,7 @@ export default function BookingFlow({ cfg }: { cfg: BookingConfig }) {
               <div className="card" style={{ boxShadow: "none", background: "var(--tint)" }}>
                 <table className="t" style={{ marginBottom: 6 }}><tbody>
                   <tr><th scope="row">Session price</th><td>{price == null ? "To be confirmed" : dollars(price)}</td></tr>
-                  <tr><th scope="row">Deposit due now</th><td><strong>{dollars(cfg.depositCents)}</strong></td></tr>
+                  <tr><th scope="row">Deposit due now</th><td><strong>{dollars(eff.deposit)}</strong></td></tr>
                   {beautyYes && <tr><th scope="row">Beauty editing (2 photos)</th><td>{dollars(cfg.beautyEditCents)} later</td></tr>}
                   <tr><th scope="row">Balance after session</th><td>{balance == null ? "—" : dollars(balance)}</td></tr>
                 </tbody></table>
@@ -249,7 +279,7 @@ export default function BookingFlow({ cfg }: { cfg: BookingConfig }) {
                 <span>I agree to the booking terms and cancellation policy. <em className="small muted">(Required to book; it isn't an optional question.)</em></span>
               </label>
               <button className="btn btn-primary" style={{ width: "100%" }} disabled={busy} onClick={reserve}>
-                {busy ? "Holding your time…" : `Pay ${dollars(cfg.depositCents)} deposit to reserve →`}
+                {busy ? "Holding your time…" : `Pay ${dollars(eff.deposit)} deposit to reserve →`}
               </button>
               <p className="small muted" style={{ marginTop: 10 }}>
                 {cfg.demo ? "Demo: you'll see a practice payment page. No real card is used." : "You'll pay securely on Stripe's page. I never see your card number."} Your time is held for about {cfg.holdMinutes} minutes while you pay.
@@ -258,6 +288,7 @@ export default function BookingFlow({ cfg }: { cfg: BookingConfig }) {
             </div>
           </div>
         )}
+        </>)}
       </div>
     </section>
   );

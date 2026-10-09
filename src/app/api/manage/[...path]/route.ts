@@ -5,7 +5,9 @@ import { handle, json, readJson, assertSameOrigin, clientIp, COOKIE, cookieOpts 
 import { AppError, addTask, enqueue, audit } from "@/lib/core";
 import { getDb } from "@/lib/db";
 import { checkToken, exchangeForSession, sessionBooking, rateLimit } from "@/lib/access";
-import { getBookingView, saveIntake, balanceSummary, VersionConflict } from "@/lib/booking";
+import { getBookingView, saveIntake, balanceSummary, VersionConflict, clientChangeRules, clientReschedule, clientCancel } from "@/lib/booking";
+import { getPublicAvailability } from "@/lib/availability";
+import { getType } from "@/lib/sessiontypes";
 import { getSettings } from "@/lib/settings";
 import { getSeason } from "@/lib/seasons";
 import { processOutbox } from "@/lib/outbox";
@@ -34,7 +36,15 @@ export const GET = handle(async (req: NextRequest, ctx: Ctx) => {
       quote: v.quote, balance: bal, maxPeople: s.maxPeople, location: v.quote.location, demo: v.quote.isDemo,
       beautyCopy: season?.published?.beautyCopy ?? "", rescheduleCutoffHours: v.terms.rescheduleCutoffHours,
       when: formatWhen(v.startsAt, s.timezone), hasEmail: !!v.recoveryEmail,
+      typeName: v.quote.typeName ?? null, rules: await clientChangeRules(v.id),
     });
+  }
+  if (action === "change-options") {
+    const v = await me();
+    const rules = await clientChangeRules(v.id);
+    const s = await getSettings();
+    const av = rules.canReschedule ? await getPublicAvailability(v.seasonId, v.typeId) : null;
+    return json({ rules, timezone: s.timezone, slots: av ? av.slots.filter((x) => x.id !== v.slotId) : [] });
   }
   if (action === "ics") {
     const v = await me();
@@ -123,6 +133,21 @@ export const POST = handle(async (req: NextRequest, ctx: Ctx) => {
     return json({ ok: true });
   }
 
+  if (action === "reschedule") {
+    const v = await me();
+    if (!(await rateLimit(`resched:${v.id}`, 10, 3600))) throw new AppError("rate_limited", "Too many changes. Please wait a bit.", 429);
+    const { slotId } = await readJson(req);
+    await clientReschedule(v.id, String(slotId ?? ""));
+    after(() => processOutbox().catch(() => {}));
+    return json({ ok: true });
+  }
+  if (action === "cancel") {
+    const v = await me();
+    const { reason } = await readJson(req);
+    await clientCancel(v.id, String(reason ?? "").slice(0, 500));
+    after(() => processOutbox().catch(() => {}));
+    return json({ ok: true });
+  }
   if (action === "request-change") {
     const v = await me();
     const { type, note } = await readJson(req);

@@ -6,6 +6,7 @@ export interface SlotPlanInput {
   endTime: string;         // HH:MM local (range end; no slot may run past it)
   durationMin: number;     // session length
   bufferMin: number;       // gap after each session before the next may start
+  stepMin?: number | null; // how often a start time is offered (default: length + break; can never be shorter)
   breaks?: { start: string; end: string }[]; // HH:MM local intervals with no sessions
   tz: string;
 }
@@ -48,7 +49,9 @@ export function planSlots(i: SlotPlanInput): PlannedSlot[] {
   });
 
   const out: PlannedSlot[] = [];
-  const stepMs = (i.durationMin + i.bufferMin) * 60_000;
+  const minStep = i.durationMin + i.bufferMin;
+  if (i.stepMin != null && (!Number.isInteger(i.stepMin) || i.stepMin < minStep)) throw new SlotPlanError(`Start times can't be closer together than the session length plus the break (${minStep} minutes).`);
+  const stepMs = (i.stepMin ?? minStep) * 60_000;
   const durMs = i.durationMin * 60_000;
   for (let t = rangeStart.getTime(); t + durMs <= rangeEnd.getTime(); t += stepMs) {
     const s = new Date(t), e = new Date(t + durMs);

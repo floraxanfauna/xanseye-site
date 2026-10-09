@@ -49,12 +49,11 @@ function SlotRow({ s, tz, date, onChanged, notify }: { s: Row; tz: string; date:
   );
 }
 
-export default function SlotEditor() {
+export default function SlotEditor({ typeId, seasonId: seasonProp }: { typeId: string; seasonId: string }) {
   const { show, node } = useToast();
   const now = new Date();
   const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-  const [seasons, setSeasons] = useState<any[]>([]);
-  const [seasonId, setSeasonId] = useState("");
+  const seasonId = seasonProp;
   const [tz, setTz] = useState("America/Denver");
   const [dur0, setDur0] = useState(30);
   const [brk0, setBrk0] = useState(15);
@@ -65,19 +64,17 @@ export default function SlotEditor() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    Promise.all([api("GET", "seasons"), api("GET", "settings")]).then(([s, st]) => {
-      const list = s.seasons.filter((x: any) => x.status !== "archived"); setSeasons(list);
-      setSeasonId((list.find((x: any) => x.status === "published") ?? list[0])?.id ?? "");
-      setTz(st.settings.timezone); setDur0(st.settings.schedule.durationMin); setBrk0(st.settings.schedule.bufferMin);
-      setAdd((a) => ({ ...a, len: st.settings.schedule.durationMin, brk: st.settings.schedule.bufferMin }));
+    Promise.all([api("GET", `type/${typeId}`), api("GET", "settings")]).then(([t, st]) => {
+      setTz(st.settings.timezone); setDur0(t.type.config.durationMin); setBrk0(t.type.config.bufferMin);
+      setAdd((a) => ({ ...a, len: t.type.config.durationMin, brk: t.type.config.bufferMin }));
     }).catch((e) => show(e.message, "error"));
-  }, [show]);
+  }, [show, typeId]);
 
   const load = useCallback(async () => {
     const last = new Date(Date.UTC(view.y, view.m, 0)).getUTCDate();
-    const r = await api("GET", `slots?from=${ymdOf(view.y, view.m, 1)}&to=${ymdOf(view.y, view.m, last)}`);
+    const r = await api("GET", `slots?from=${ymdOf(view.y, view.m, 1)}&to=${ymdOf(view.y, view.m, last)}&type=${typeId}`);
     setSlots(r.slots);
-  }, [view]);
+  }, [view, typeId]);
   useEffect(() => { load().catch((e) => show(e.message, "error")); }, [load, show]);
 
   const counts = useMemo(() => { const c: Record<string, number> = {}; for (const s of slots) if (s.state === "open") c[s.date] = (c[s.date] ?? 0) + 1; return c; }, [slots]);
@@ -86,7 +83,7 @@ export default function SlotEditor() {
   async function addTime() {
     if (!date || !seasonId) return;
     setBusy(true);
-    try { await api("POST", "slots/add", { seasonId, date, startTime: add.start, durationMin: add.len, bufferMin: add.brk }); show("Time added."); await load(); }
+    try { await api("POST", "slots/add", { seasonId, typeId, date, startTime: add.start, durationMin: add.len, bufferMin: add.brk }); show("Time added."); await load(); }
     catch (e: any) { show(e.message, "error"); } finally { setBusy(false); }
   }
 
@@ -118,7 +115,6 @@ export default function SlotEditor() {
                   <select id="a-br" value={add.brk} onChange={(e) => setAdd({ ...add, brk: Number(e.target.value) })} style={{ width: "auto" }}>{withCur(BREAKS, brk0).map((o) => <option key={o} value={o}>{o === 0 ? "none" : `${o} min`}</option>)}</select></div>
                 <button className="btn btn-primary btn-sm" disabled={busy || !seasonId} onClick={addTime}>Add time</button>
               </div>
-              {seasons.length > 1 && <div className="field" style={{ marginBottom: 0 }}><label className="label small" htmlFor="a-se">For season</label><select id="a-se" value={seasonId} onChange={(e) => setSeasonId(e.target.value)}>{seasons.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>}
             </div>
             <p className="small muted" style={{ margin: 0 }}>Times that are already booked can't be edited here. Open their session to reschedule or cancel. Times can't overlap each other. If you move or remove a time, your weekly schedule and auto-fill won't bring it back. To start over from your usual hours, publish the weekly schedule with "Replace unbooked times" ticked.</p>
           </>

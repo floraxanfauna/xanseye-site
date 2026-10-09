@@ -2,6 +2,7 @@ import { getDb, type Q } from "./db";
 import { AppError, audit } from "./core";
 import { ContentSchema, defaultContent, launchGaps, contrastIssues, parseContent, THEMES, type PageContent } from "./content";
 import { getSettings } from "./settings";
+import { ensureDefaultType } from "./sessiontypes";
 
 export interface Season {
   id: string; slug: string; name: string; status: "draft" | "published" | "archived";
@@ -47,6 +48,7 @@ export async function createSeason(name: string, content?: PageContent): Promise
   const c = content ?? defaultContent(name);
   c.title = name;
   const r = await db.query(`insert into seasons(slug, name, draft) values ($1,$2,$3) returning *`, [slug, name, JSON.stringify(c)]);
+  await ensureDefaultType(db, r.rows[0].id);
   return rowToSeason(r.rows[0]);
 }
 

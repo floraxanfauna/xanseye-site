@@ -5,12 +5,13 @@ import { currentOwner } from "@/lib/auth";
 import { cssVars, photoSrc, type PageContent } from "@/lib/content";
 import { localDate } from "@/lib/time";
 import { dollars } from "@/lib/format";
-import BookingFlow, { type BookingConfig } from "@/components/BookingFlow";
+import BookingFlow, { type BookingConfig, type PublicType } from "@/components/BookingFlow";
+import { listTypes } from "@/lib/sessiontypes";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // first visit in demo mode sets up sample content
 
-type SP = Promise<{ season?: string; preview?: string }>;
+type SP = Promise<{ season?: string; preview?: string; type?: string }>;
 
 async function resolve(sp: Awaited<SP>): Promise<{ slug: string; id: string; content: PageContent; preview: boolean } | null> {
   if (sp.preview) {
@@ -60,18 +61,23 @@ export default async function MiniSessions({ searchParams }: { searchParams: SP 
   const logo = c.logoAssetId ? img(c.logoAssetId) : "/xanseye-logo-trim.png";
   const photos = c.photos.slice(0, 4);
 
+  const types: PublicType[] = (await listTypes({ seasonId: r.id, activeOnly: true })).map((t) => ({ slug: t.slug, name: t.name, durationMin: t.config.durationMin, priceCents: t.config.priceCents, depositCents: t.config.depositCents, location: t.config.location, instructions: t.config.instructions, maxPeople: t.config.maxPeople, color: t.color }));
+  const picked = types.find((t) => t.slug === sp.type) ?? (types.length === 1 ? types[0] : null);
   const cfg: BookingConfig = {
+    types, initialTypeSlug: picked?.slug ?? null,
     seasonSlug: r.slug, timezone: s.timezone, today, depositCents: s.depositCents, beautyEditCents: s.beautyEditCents, maxPeople: s.maxPeople, demo: s.demoMode,
     sessionPriceCents: c.facts.sessionPriceCents, depositPolicy: c.depositPolicy, durationMin: c.facts.durationMin, location: c.facts.location,
     termsText: c.termsText, refundTerms: c.refundTerms, holdMinutes: s.holdMinutes, beautyCopy: c.beautyCopy, buttonText: c.buttonText, preview: r.preview,
   };
   const f = c.facts;
+  const many = types.length > 1 && !picked;
+  const dur = picked?.durationMin ?? f.durationMin, price = picked?.priceCents ?? f.sessionPriceCents, dep = picked?.depositCents ?? s.depositCents, where = picked?.location || f.location;
   const factItems = [
-    f.durationMin ? ["Length", `${f.durationMin} minutes`] : null,
-    f.sessionPriceCents != null ? ["Session price", dollars(f.sessionPriceCents)] : null,
-    ["Deposit", `${dollars(s.depositCents)} to reserve${c.depositPolicy === "credit" ? " (credited)" : ""}`],
+    !many && dur ? ["Length", `${dur} minutes`] : null,
+    !many && price != null ? ["Session price", dollars(price)] : null,
+    !many ? ["Deposit", `${dollars(dep)} to reserve${c.depositPolicy === "credit" ? " (credited)" : ""}`] : null,
     f.deliverables ? ["You receive", f.deliverables] : null,
-    f.location ? ["Where", f.location] : null,
+    !many && where ? ["Where", where] : null,
     f.turnaround ? ["Delivery", f.turnaround] : null,
   ].filter(Boolean) as string[][];
 

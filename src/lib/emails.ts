@@ -3,6 +3,7 @@ import { balanceSummary } from "./booking";
 import { FIELD_LABELS, displayField, firstNameOf, renderIntakeText, type FieldChange, type FieldKey } from "./intake";
 import { formatWhen, formatTime, formatDateLong, tzAbbrev } from "./time";
 import { appUrl, dollars, escapeHtml } from "./util";
+import { renderTemplate } from "./sessiontypes";
 import type { DocLine } from "./google/client";
 
 export interface Built { subject: string; text: string; html: string }
@@ -64,11 +65,12 @@ export function ownerIntakeChanged(b: BookingView, tz: string, version: number, 
   return build(`Form updated: ${b.ref}, ${changes.map((c) => c.label).slice(0, 3).join(", ")}`, text);
 }
 
-export function clientConfirmation(b: BookingView, tz: string, o: { manageLink: string; rescheduled: boolean; siteName: string; ownerEmail: string }): Built {
+export function clientConfirmation(b: BookingView, tz: string, o: { manageLink: string; rescheduled: boolean; siteName: string; ownerEmail: string; message?: string; canSelfChange?: boolean }): Built {
   const q = b.quote;
   const text = [
-    o.rescheduled ? `Your mini session was moved.` : `You're booked! Here are your details.`,
+    o.rescheduled ? `Your ${q.typeName ?? "session"} was moved.` : `You're booked! Here are your details.`,
     ``,
+    q.typeName ? `Session: ${q.typeName}` : "",
     `When: ${formatWhen(b.startsAt, tz)}`,
     q.location ? `Where: ${q.location}` : "",
     q.durationMin ? `Length: ${q.durationMin} minutes` : "",
@@ -81,14 +83,17 @@ export function clientConfirmation(b: BookingView, tz: string, o: { manageLink: 
     o.manageLink,
     `Keep this email private. The link opens your booking.`,
     ``,
-    `Need a different date or need to cancel? Reply to this email or write ${o.ownerEmail}.`,
+    o.message ? `${o.message}\n` : "",
+    o.canSelfChange ? `Need a different time or need to cancel? You can change it yourself from the link above (within the notice period), or reply to this email.` : `Need a different date or need to cancel? Reply to this email or write ${o.ownerEmail}.`,
     ``,
     `— ${o.siteName}`,
   ].filter((l) => l !== "").join("\n");
   return build(o.rescheduled ? `Your session was moved: ${formatWhen(b.startsAt, tz)}` : `You're booked: ${formatWhen(b.startsAt, tz)}`, text);
 }
 
-export function clientReminder(b: BookingView, tz: string, hours: number, o: { manageLink: string; siteName: string; prep: string }): Built {
+export function clientReminder(b: BookingView, tz: string, hours: number, o: { manageLink: string; siteName: string; prep: string; custom?: { subject: string; body: string } }): Built {
+  const vars = { first_name: firstNameOf(b.intake) ?? "", when: formatWhen(b.startsAt, tz), where: b.quote.location, manage_link: o.manageLink, session: b.quote.typeName ?? "session" };
+  if (o.custom?.body) return build(renderTemplate(o.custom.subject || `Reminder: your session ${formatDateLong(b.startsAt, tz)}`, vars), renderTemplate(o.custom.body, vars));
   const text = [
     `A friendly reminder: your mini session is ${hours >= 48 ? "in 2 days" : "tomorrow"}.`,
     ``,
@@ -100,7 +105,7 @@ export function clientReminder(b: BookingView, tz: string, hours: number, o: { m
     ``,
     `— ${o.siteName}`,
   ].filter((l) => l !== "").join("\n");
-  return build(`Reminder: your session ${formatDateLong(b.startsAt, tz)}`, text);
+  return build(o.custom?.subject ? renderTemplate(o.custom.subject, vars) : `Reminder: your session ${formatDateLong(b.startsAt, tz)}`, text);
 }
 
 export function clientRecovery(link: string, siteName: string): Built {
