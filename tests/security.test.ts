@@ -195,7 +195,7 @@ describe("photos on the page", () => {
     const { seedDemo } = await import("@/lib/seed");
     const pub = await seedDemo({ slots: false });
     expect(pub!.published!.photos.map((p) => p.url)).toEqual([
-      "/sample-photos/mini-1-mountain-family.jpg", "/sample-photos/mini-2-golden-light.jpg", "/sample-photos/mini-3-jumping-kids.jpg", "/sample-photos/mini-4-garden-walk.jpg",
+      "/sample-photos/mini-1-mountain-family.jpg", "/sample-photos/mini-2-golden-light.jpg", "/sample-photos/mini-3-autumn-family.jpg", "/sample-photos/mini-4-garden-walk.jpg",
     ]);
   });
 });

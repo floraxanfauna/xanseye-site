@@ -19,7 +19,7 @@ export async function seedDemo(opts: { slots?: boolean; photos?: boolean } = {})
   const photos: { url: string; alt: string }[] = opts.photos === false ? [] : [
     { url: "/sample-photos/mini-1-mountain-family.jpg", alt: "Sample photo: a family of six posing together on a green mountain hillside" },
     { url: "/sample-photos/mini-2-golden-light.jpg", alt: "Sample photo: a smiling couple with their toddler son in warm golden evening light" },
-    { url: "/sample-photos/mini-3-jumping-kids.jpg", alt: "Sample photo: five children holding hands and jumping against a white studio backdrop" },
+    { url: "/sample-photos/mini-3-autumn-family.jpg", alt: "Sample photo: a family of four in autumn clothes standing arm in arm in front of orange and gold fall trees" },
     { url: "/sample-photos/mini-4-garden-walk.jpg", alt: "Sample photo: a couple walking hand in hand with their young son along a shaded garden path" },
   ];
   const logoAssetId: string | null = null; // the default Xan's Eye logo is used
