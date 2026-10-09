@@ -10,6 +10,18 @@ export default function SettingsView() {
   const [cals, setCals] = useState<any[]>([]);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [gaps, setGaps] = useState<any[]>([]);
+  const [savingCals, setSavingCals] = useState(false);
+  async function toggleCal(id: string, on: boolean) {
+    const next = new Set(chosen); on ? next.add(id) : next.delete(id);
+    setChosen(next); setSavingCals(true);
+    try {
+      const r = await api("POST", "google/conflicts", { ids: [...next] });
+      setChosen(new Set(r.ids)); // what the server actually stored
+      show("Saved.");
+    } catch (e: any) {
+      setChosen(chosen); show(`Couldn't save: ${e.message}`, "error"); // roll back so the screen never lies
+    } finally { setSavingCals(false); }
+  }
   const q = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("google") : null;
 
   const load = useCallback(async () => {
@@ -53,9 +65,11 @@ export default function SettingsView() {
             : g.status === "connected" ? (<>
               <div><span className="badge badge-ok">Connected</span> as {g.account}{g.checkedAt && <span className="small muted"> · checked {new Date(g.checkedAt).toLocaleString()}</span>}</div>
               <fieldset className="field" style={{ marginBottom: 0 }}><legend className="small">Calendars that should BLOCK booking times (read-only check)</legend>
-                <div className="choices">{cals.filter((c) => c.id !== g.calendarId).map((c) => <label key={c.id} className="choice"><input type="checkbox" checked={chosen.has(c.id)} onChange={(e) => setChosen((p) => { const n = new Set(p); e.target.checked ? n.add(c.id) : n.delete(c.id); return n; })} /><span>{c.name}</span></label>)}</div>
+                <div className="choices">{cals.filter((c) => c.id !== g.calendarId).map((c) => <label key={c.id} className="choice"><input type="checkbox" checked={chosen.has(c.id)} disabled={savingCals} onChange={(e) => toggleCal(c.id, e.target.checked)} /><span>{c.name}</span></label>)}</div>
+                {cals.length === 0 && <p className="hint">Loading your calendars…</p>}
+                <p className="hint" role="status">{savingCals ? "Saving…" : chosen.size ? `✓ Saved. ${chosen.size} calendar${chosen.size === 1 ? "" : "s"} will block booking times.` : "No calendars selected, so only your published times and bookings decide what's open."}</p>
                 <p className="hint">iCloud-only calendars can't be checked from here. Put those events on a Google calendar, or block those times by hand.</p>
-                <div><button className="btn btn-ghost btn-sm" onClick={async () => { await api("POST", "google/conflicts", { ids: [...chosen] }); show("Saved."); }}>Save blocking calendars</button></div></fieldset>
+              </fieldset>
               <div className="row"><button className="btn btn-ghost btn-sm" onClick={async () => { const r = await api("POST", "google/check", {}); show(`Connection: ${r.result}`); load(); }}>Test connection</button><button className="btn btn-danger btn-sm" onClick={async () => { if (confirm("Disconnect Google? Calendar and Doc syncing stops until you reconnect.")) { await api("POST", "google/disconnect", {}); load(); } }}>Disconnect</button></div>
             </>) : (<>
               <div>{g.status === "needs_reauth" ? <span className="badge badge-bad">Needs reconnecting</span> : <span className="badge badge-warn">Not connected</span>} {g.error && <span className="small">{g.error}</span>}</div>

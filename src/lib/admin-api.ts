@@ -211,9 +211,11 @@ export async function googleAction(action: string, body: any) {
     const g = await getGoogleIntegration();
     if (!g) throw new AppError("not_connected", "Connect Google first.", 409);
     // never use the app's own calendar as a conflict source
-    await saveGoogleMeta({ conflictCalendarIds: ids.filter((i) => i !== g.meta.calendarId) });
+    const kept = [...new Set(ids.filter((i) => i !== g.meta.calendarId))];
+    await saveGoogleMeta({ conflictCalendarIds: kept });
     await installGoogleBusyFetcher();
-    return { ok: true };
+    // read back what was actually stored, so the screen shows the truth
+    return { ok: true, ids: (await getGoogleIntegration())?.meta.conflictCalendarIds ?? [] };
   }
   if (action === "disconnect") { await disconnectGoogle(); return { ok: true }; }
   if (action === "check") return { result: await googleHealthCheck() };
